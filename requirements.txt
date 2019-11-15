@@ -1,0 +1,6 @@
+simple-pid
+smbus
+RPi.GPIO
+MCP9600
+#Adafruit-MAX31855
+
