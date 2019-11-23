@@ -15,19 +15,20 @@ m.configure_alert(2, monitor_junction=0, limit=40, mode=1, enable=True, rise_fal
 m.configure_alert(3, monitor_junction=0, limit=40, mode=1, enable=True, rise_fall=1)
 
 while True:
+    print(time.time())
     t = m.get_hot_junction_temperature()
-    c = m.get_cold_junction_temperature()
-    d = m.get_temperature_delta()
+    # c = m.get_cold_junction_temperature()
+    # d = m.get_temperature_delta()
 
-    alerts = m.check_alerts()
+    # alerts = m.check_alerts()
 
-    for x in range(1, 5):
-        if alerts[x - 1] == 1:
-            m.clear_alert(x)
+    # for x in range(1, 5):
+    #     if alerts[x - 1] == 1:
+    #         m.clear_alert(x)
 
-    print("Alerts: ", alerts)
+    # print("Alerts: ", alerts)
 
-    print("Hot: {}, Cold {}, Delta {}".format(t,c,d))
+    # print("Hot: {}, Cold {}, Delta {}".format(t,c,d))
 
-    time.sleep(1.0)
+    # time.sleep(1.0)
 
