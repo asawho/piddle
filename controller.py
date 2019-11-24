@@ -6,6 +6,7 @@ import time
 import datetime
 import sched
 import logging
+import json
 import config
 import sensors
 import runtimeConfig
@@ -15,6 +16,8 @@ from simple_pid import PID
 import RPi.GPIO as GPIO
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
+
+log = logging.getLogger()
 
 class RampStep:
     def __init__(self, currentValue, targetValue, rampType, typeValue):
@@ -30,8 +33,12 @@ class RampStep:
         else:
             raise Exception("Unknown or missing ramp type {}".format(rampType))
 
+        self.rampPointDelta = targetValue - currentValue
         self.rampDuration = self.rampEndTime-self.rampStartTime
         self.rampEndPoint = targetValue    
+
+        dtstr = datetime.datetime.fromtimestamp(self.rampEndTime).strftime("%c")
+        log.info('Ramping -> Current: {} Target: {} Type: {} Value: {} EndTime: {}'.format(currentValue, targetValue, rampType, typeValue, dtstr))
 
     def isComplete(self):
         return time.time() >= self.rampEndTime
@@ -43,7 +50,7 @@ class RampStep:
         return self.rampEndTime
 
     def currentTarget(self):
-        val = self.rampStartPoint + (time.time()-self.rampStartTime)/self.rampDuration
+        val = self.rampStartPoint + self.rampPointDelta * ((time.time()-self.rampStartTime)/self.rampDuration)
         if self.rampEndPoint > self.rampStartPoint:
             val = min(val,self.rampEndPoint)
         if self.rampEndPoint < self.rampStartPoint:
@@ -92,6 +99,7 @@ class PidController(threading.Thread):
         self.runtimeConfig.reset()
 
     def setModeOff(self):
+        log.info('Mode -> Off')
         with self.lock:
             self.mode = ControllerMode.OFF
             self.dutyCycle=0
@@ -99,6 +107,7 @@ class PidController(threading.Thread):
         return True
 
     def setModeManual(self, duty):
+        log.info('Mode -> Manual, Output: {}'.format(duty))
         with self.lock:
             self.mode = ControllerMode.MANUAL
             self.modeManual_Output = duty
@@ -106,6 +115,7 @@ class PidController(threading.Thread):
         return True
 
     def setModeSetPoint(self, target, rampRatePerHour=0):
+        log.info('Mode -> SetPoint, Target: {} RampRatePerHour: {}'.format(target, rampRatePerHour))
         with self.lock:
             self.mode = ControllerMode.SETPOINT
             self.modeSetPoint_Target = target
@@ -121,6 +131,7 @@ class PidController(threading.Thread):
             return False
         profile = self.cfgData["profiles"][profilename]
 
+        log.info('Mode -> Profile: {}'.format(profilename))
         with self.lock:
             self.mode = ControllerMode.PROFILE
             self.modeProfile_Name = profilename
@@ -131,28 +142,19 @@ class PidController(threading.Thread):
         
         return True
 
-    def getState(self):
+    def getState(self, shortNames=False):
         data = {}
-        data["mode"] = str(self.mode)
-        data["temperature"] = self.tc.temperature
-        if self.mode == ControllerMode.MANUAL:
-            data["manualOutput"] = self.modeManual_Output
-        if self.mode == ControllerMode.SETPOINT:
-            data["target"] = self.modeSetPoint_Target
-            data["rampRate"] = self.modeSetPoint_RampRate
-        if self.mode == ControllerMode.PROFILE:
-            data["profile"] = self.modeProfile_Name
-            data["profileStep"] = self.modeProfile_Step
-            if self.ramping:
-                data["target"] = self.ramp.finalTarget()
-                data["targetTime"]= self.ramp.finalTime()
-                data["profileComplete"]=False
-            else:
-                data["target"] = self.modeProfile_Profile[-1]["target"]
-                data["targetTime"]=time.time()
-                data["profileComplete"]=self.ramp.isComplete()                
-
-        return data
+        short = {}
+        data["mode"] = short["m"] = str(self.mode)
+        data["currentTemperature"] = short["curr"] = round(self.tc.temperature)
+        data["currentTarget"] = short["ctgt"] = round(self.pid.setpoint)
+        data["ramping"] = short["ramping"] = self.ramping
+        data["rmpftgt"] = short["rmpftgt"] = round(self.ramp.finalTarget()) if self.ramping else 0
+        data["rmpftime"]= short["rmpftime"] = datetime.datetime.fromtimestamp(self.ramp.finalTime()).strftime("%H:%M:%S") if self.ramping else 0
+        data["output"] = short["out"] = round(self.dutyCycle, 2)
+        data["pp"], data["pi"], data["pd"] = round(self.pid.components[0],3), round(self.pid.components[1],3), round(self.pid.components[2],3)
+        short["pp"], short["pi"], short["pd"] = round(self.pid.components[0],3), round(self.pid.components[1],3), round(self.pid.components[2],3)
+        return(short if shortNames else data)
 
     #What this essentially does it takes the duty cycle and it flips the SSR on/off
     #every 1/60 of a second at the minimum sized chunks that can be fit in the the 
@@ -191,6 +193,7 @@ class PidController(threading.Thread):
         data = self.runtimeConfig.checkForNewConfig()
         if not data: 
             return
+        log.info('Configuration file program.json updated.')
 
         if data["mode"]=="OFF":
             self.setModeOff()
@@ -204,6 +207,7 @@ class PidController(threading.Thread):
         syncStartTime = int(time.time()) + self.time_step
         carryOverTime = 0
         time.sleep(syncStartTime-time.time())
+        lastLogTime=0
 
         while True:
             #Read my new thermocouple value, IMPORTANT ,this should take less than 1/60 of a second
@@ -244,6 +248,11 @@ class PidController(threading.Thread):
 
             #Handle the hotpins, do this outside of the lock as this really is constant work,
             carryOverTime = self.applyOutput(syncStartTime, carryOverTime, self.dutyCycle)
+
+            #Log it
+            if self.mode!= ControllerMode.OFF and time.time() - lastLogTime > config.log_frequency:
+                lastLogTime=time.time()
+                log.info(json.dumps(self.getState(True)))
 
             #The loop uses syncStartTime rather than adding to the current time as there
             #would be a small drift that way.  This may be something that would actually be

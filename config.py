@@ -2,8 +2,8 @@
 #
 #   General options
 
-### Logging frequency in minutes
-log_frequency = 1
+### Logging frequency in seconds
+log_frequency = 30
 
 ### Server
 listening_ip = "0.0.0.0"
@@ -19,9 +19,9 @@ sensor_time_wait = 1
 #
 #   PID parameters
 
-pid_kp = 0.05   #25  # Proportional
-pid_ki = 0.001  # Integration
-pid_kd = 0.0     # Derivative was 217
+pid_kp = 0.03      # Proportional
+pid_ki = 0.00025      # Integration
+pid_kd = 0.0        # Derivative was 217
 
 ########################################################################
 #
