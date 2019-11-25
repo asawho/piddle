@@ -250,9 +250,10 @@ class PidController(threading.Thread):
             carryOverTime = self.applyOutput(syncStartTime, carryOverTime, self.dutyCycle)
 
             #Log it
-            if self.mode!= ControllerMode.OFF and time.time() - lastLogTime > config.log_frequency:
-                lastLogTime=time.time()
-                log.info(json.dumps(self.getState(True)))
+            print(json.dumps(self.getState(True)))
+            #if self.mode!= ControllerMode.OFF and time.time() - lastLogTime > config.log_frequency:
+            #    lastLogTime=time.time()
+            #    log.info(json.dumps(self.getState(True)))
 
             #The loop uses syncStartTime rather than adding to the current time as there
             #would be a small drift that way.  This may be something that would actually be

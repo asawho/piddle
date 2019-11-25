@@ -16,13 +16,13 @@
     "mode": "SETPOINT",
 
     //MANUAL MODE - % power output, 0 to 1
-    "manualOutput" : 0.2,
+    "manualOutput" : 0.18,
     //SETPOINT MODE - target temperature
-    "setpointTarget" : 220,
+    "setpointTarget" : 1000,
 
     //SETPOINT AND PROFILE: When ramping to a setpoint or to resume a profile after a 
     //power cycle, what is the rate to ramp at.  If ==0, then as fast as possible
-    "rampRatePerHour" : 50,
+    "rampRatePerHour" : 1000,
 
     //What profiles do I know, of the format 
     //  "name" : [steps]
