@@ -72,10 +72,13 @@ class PidController(threading.Thread):
         self.time_step = config.sensor_time_wait
         self.tc = sensors.TempSensor()
 
-        self.hotpin = config.gpio_heat
-        GPIO.setup(self.hotpin, GPIO.OUT)
+        self.hotpins = config.gpio_heat
+        if not isinstance(config.gpio_heat, list):
+            self.hotpins = [config.gpio_heat]
+        for val in self.hotpins:
+            GPIO.setup(val, GPIO.OUT)
+            self.pinOff(val)
         self.dutyCycle=0.0
-        self.pinOff()
         self.sc = sched.scheduler(timefunc=time.time)
 
         self.runtimeConfig = runtimeConfig.RuntimeConfig()
@@ -98,12 +101,28 @@ class PidController(threading.Thread):
     def resetToConfig(self):
         self.runtimeConfig.reset()
 
+    def enableAlerts(self):
+        for x in range(1,5):
+            self.tc.clearAlert(x)
+        if "alerts" in self.cfgData:
+            for a in self.cfgData["alerts"]:
+                self.tc.setAlert(target=a["target"], latching=a["latching"], activeLogicLevel=a["activeLogicLevel"], alertOutputPin=a["alertOutput"])
+
+    def mechanicalRelayOff(self):
+        #Falsely trigger the temperature alert to turn off the mechanical relay
+        self.tc.clearAlert(1)
+        self.tc.setAlert(target=-30, latching=False, activeLogicLevel=1, alertOutputPin=1)
+
     def setModeOff(self):
         log.info('Mode -> Off')
         with self.lock:
             self.mode = ControllerMode.OFF
             self.dutyCycle=0
-            self.pinOff()
+            for val in self.hotpins:
+                GPIO.setup(val, GPIO.OUT)
+                self.pinOff(val)
+            self.mechanicalRelayOff()
+
         return True
 
     def setModeManual(self, duty):
@@ -112,6 +131,7 @@ class PidController(threading.Thread):
             self.mode = ControllerMode.MANUAL
             self.modeManual_Output = duty
             self.dutyCycle=duty
+            self.enableAlerts()
         return True
 
     def setModeSetPoint(self, target, rampRatePerHour=0):
@@ -123,6 +143,7 @@ class PidController(threading.Thread):
             if rampRatePerHour > 0:
                 self.ramping = True
                 self.ramp = RampStep (self.tc.temperature, target, "rate", rampRatePerHour)
+            self.enableAlerts()
         return True
 
     def setModeProfile(self, profilename):
@@ -139,7 +160,7 @@ class PidController(threading.Thread):
             self.modeProfile_Step = 0
             self.ramping = True
             self.ramp = RampStep (self.tc.temperature, self.modeProfile_Profile[self.modeProfile_Step]["target"], self.modeProfile_Profile[self.modeProfile_Step]["type"], self.modeProfile_Profile[self.modeProfile_Step]["value"])
-        
+            self.enableAlerts()
         return True
 
     def getState(self, shortNames=False):
@@ -161,28 +182,32 @@ class PidController(threading.Thread):
     #time_step.  It just does all this before hand and then sets these up as a 
     #schedule to be run.  Since the scheduled events are lined up for the entire
     #time_step, then when sc.run() is done, we are ready for another regular loop.    
-    def pinOn(self):
-        #print("On  ", end='')
-        GPIO.output(self.hotpin, 1)
+    def pinOn(self, pinNumber):
+        #print("{}:1 ".format(pinNumber), end='')
+        #print("1".format(pinNumber), end='')
+        GPIO.output(pinNumber, 1)
 
-    def pinOff(self):
-        #print("Off ", end='')
-        GPIO.output(self.hotpin, 0)
+    def pinOff(self, pinNumber):
+        #print("{}:0 ".format(pinNumber), end='')
+        #print("0".format(pinNumber), end='')
+        GPIO.output(pinNumber, 0)
 
     def applyOutput(self, syncStartTime, carryInTime, duty):
         flips = self.time_step*60
-        numberOn = flips * duty
-        numberOff = flips - numberOn
-        oneOnForEveryHowManyOff = (numberOn/numberOff) if numberOff > 0 else 10000000
+        #print()
+        #print()
         #print("On:{} Off:{} Ratio:{} Carry: {}".format(numberOn, numberOff, oneOnForEveryHowManyOff, carryInTime))
         runningTotal = carryInTime
+        self.hotpins=self.hotpins[-1:] + self.hotpins[:-1]
+        numPins=len(self.hotpins)
         for step in range(flips):
-            if runningTotal >= 1:
-                runningTotal -= 1.0
-                self.sc.enterabs(syncStartTime+step/flips, 1, self.pinOn)
-            else:                    
-                runningTotal += oneOnForEveryHowManyOff
-                self.sc.enterabs(syncStartTime+step/flips, 1, self.pinOff)
+            runningTotal+=duty
+            for i in range(numPins):
+                if runningTotal >= 1.0/numPins:
+                    runningTotal -= 1.0/numPins
+                    self.sc.enterabs(syncStartTime+step/flips, i+1, self.pinOn, (self.hotpins[i],))
+                else:                    
+                    self.sc.enterabs(syncStartTime+step/flips, i+1, self.pinOff, (self.hotpins[i],))
         carryOverTime = runningTotal
         self.sc.run()
         #print("")
@@ -194,6 +219,8 @@ class PidController(threading.Thread):
         if not data: 
             return
         log.info('Configuration file program.json updated.')
+
+        self.cfgData = data
 
         if data["mode"]=="OFF":
             self.setModeOff()
@@ -250,10 +277,10 @@ class PidController(threading.Thread):
             carryOverTime = self.applyOutput(syncStartTime, carryOverTime, self.dutyCycle)
 
             #Log it
-            print(json.dumps(self.getState(True)))
-            #if self.mode!= ControllerMode.OFF and time.time() - lastLogTime > config.log_frequency:
-            #    lastLogTime=time.time()
-            #    log.info(json.dumps(self.getState(True)))
+            #print(json.dumps(self.getState(True)))
+            if self.mode!= ControllerMode.OFF and time.time() - lastLogTime > config.log_frequency:
+                lastLogTime=time.time()
+                log.info(json.dumps(self.getState(True)))
 
             #The loop uses syncStartTime rather than adding to the current time as there
             #would be a small drift that way.  This may be something that would actually be

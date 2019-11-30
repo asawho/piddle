@@ -54,7 +54,22 @@ class TempSensor:
 
         if config.mcp9600:
             self.thermocouple = mcp9600.MCP9600()
+            for x in range(1, 5):
+                self.thermocouple.clear_alert(x)
+                self.thermocouple.configure_alert(x, enable=False)
+
             self.thermocouple.get = self.thermocouple.get_hot_junction_temperature
+
+    def clearAlert(self, alertOutputPin):
+        self.thermocouple.clear_alert(alertOutputPin)
+
+    def setAlert(self, target, latching, activeLogicLevel, alertOutputPin):
+        # monitor_junction, 1 Cold Junction, 0 Thermocouple
+        # rise_fall, 1 rising, 0 cooling
+        # state, 1 active high, 0 active low
+        # mode, 1 interrupt mode, 0 comparator mode
+        inC = (target-32.0)*5.0/9.0
+        self.thermocouple.configure_alert(alertOutputPin, monitor_junction=0, limit=inC, state=activeLogicLevel, mode=1 if latching else 0, enable=True, rise_fall=1)
 
     def update(self):
         try:

@@ -13,16 +13,25 @@
 //-----------------------------------------------------------------------------------------
 {
     //Execution mode, OFF, MANUAL, SETPOINT
-    "mode": "SETPOINT",
+    "mode": "MANUAL",
 
     //MANUAL MODE - % power output, 0 to 1
-    "manualOutput" : 0.18,
+    "manualOutput" : 0.1,
     //SETPOINT MODE - target temperature
     "setpointTarget" : 1000,
 
     //SETPOINT AND PROFILE: When ramping to a setpoint or to resume a profile after a 
     //power cycle, what is the rate to ramp at.  If ==0, then as fast as possible
     "rampRatePerHour" : 1000,
+
+    //What alerts do I have, this is only supported for MCP9600 
+    // { target: [target temperature], latching: [true or false], activeLogicLevel: [0 or 1], alertOutput: [1 through 5] }
+    "alerts": [
+        //Non-latching
+        //{ target: 2300, latching: false, activeLogicLevel: 1, alertOutput: 1 }
+        //Latching
+        { "target": 2300, "latching": true, "activeLogicLevel": 0, "alertOutput": 1 }
+    ],
 
     //What profiles do I know, of the format 
     //  "name" : [steps]

@@ -33,7 +33,7 @@ pid_kd = 0.0        # Derivative was 217
 #   can use whichever GPIO you prefer/have available.
 
 ### Outputs
-gpio_heat = 23  # Switches zero-cross solid-state-relay
+gpio_heat = [23,24]  # Switches zero-cross solid-state-relay
 
 ### Thermocouple Adapter selection:
 #   max31855 - bitbang SPI interface

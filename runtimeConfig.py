@@ -54,6 +54,21 @@ class RuntimeConfig:
                 if "value" not in value:
                     errors.append("Step {} of profile {} has no value set.".format(index,key))
 
+    def validateAlerts(self, alerts, errors):
+        #Validate the profiles
+        for index, value in enumerate(alerts):
+            if "target" not in value:
+                errors.append("Alert {} has no target set.".format(index))
+
+            if "latching" not in value:
+                errors.append("Alert {} has no latching set.".format(index))
+ 
+            if "activeLogicLevel" not in value:
+                errors.append("Alert {} has no activeLogicLevel set.".format(index))
+
+            if "alertOutput" not in value:
+                errors.append("Alert {} has no alertOutput set.".format(index))
+
     def validateNumberSetting(self, data, name, errors, domain=None):
         if name not in data:
             errors.append("program.json has no {} setting".format(name))
@@ -84,6 +99,9 @@ class RuntimeConfig:
             errors.append("program.json has no profiles settings".format(key))
         else:
             self.validateProfiles(data["profiles"], errors)
+
+        if "alerts" in data:
+            self.validateAlerts(data["alerts"], errors)
 
         if len(errors):
             for err in errors: 
