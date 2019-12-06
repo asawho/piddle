@@ -9,7 +9,7 @@ import logging
 import json
 import config
 import sensors
-import runtimeConfig
+import operationConfig
 import config
 from simple_pid import PID
 
@@ -20,25 +20,25 @@ GPIO.setwarnings(False)
 log = logging.getLogger()
 
 class RampStep:
-    def __init__(self, currentValue, targetValue, rampType, typeValue):
+    def __init__(self, startValue, targetValue, rampType, typeValue):
         self.rampStartTime = time.time()
-        self.rampStartPoint = currentValue
+        self.rampStartPoint = startValue
 
         #In degrees per hour
         if rampType=="rate":
-            self.rampEndTime = self.rampStartTime + (abs(targetValue - currentValue)/typeValue)*3600
+            self.rampEndTime = self.rampStartTime + (abs(targetValue - startValue)/typeValue)*3600
         #In hours
         elif rampType=="time":
             self.rampEndTime = self.rampStartTime + typeValue*3600
         else:
             raise Exception("Unknown or missing ramp type {}".format(rampType))
 
-        self.rampPointDelta = targetValue - currentValue
+        self.rampPointDelta = targetValue - startValue
         self.rampDuration = self.rampEndTime-self.rampStartTime
         self.rampEndPoint = targetValue    
 
         dtstr = datetime.datetime.fromtimestamp(self.rampEndTime).strftime("%c")
-        log.info('Ramping -> Current: {} Target: {} Type: {} Value: {} EndTime: {}'.format(currentValue, targetValue, rampType, typeValue, dtstr))
+        log.info('Ramping -> Current: {} Target: {} Type: {} Value: {} EndTime: {}'.format(startValue, targetValue, rampType, typeValue, dtstr))
 
     def isComplete(self):
         return time.time() >= self.rampEndTime
@@ -81,8 +81,7 @@ class PidController(threading.Thread):
         self.dutyCycle=0.0
         self.sc = sched.scheduler(timefunc=time.time)
 
-        self.runtimeConfig = runtimeConfig.RuntimeConfig()
-        self.cfgData = None
+        self.operationConfig = operationConfig.OperationConfig()
 
         self.pid = PID (config.pid_kp, config.pid_ki, config.pid_kd, auto_mode=True, sample_time=None, output_limits=(0.0,1.0))
         self.mode = ControllerMode.OFF
@@ -99,21 +98,25 @@ class PidController(threading.Thread):
         self.ramp = None
 
     def resetToConfig(self):
-        self.runtimeConfig.reset()
+        self.operationConfig.reset()
 
     def enableAlerts(self):
         for x in range(1,5):
             self.tc.clearAlert(x)
-        if "alerts" in self.cfgData:
-            for a in self.cfgData["alerts"]:
-                self.tc.setAlert(target=a["target"], latching=a["latching"], activeLogicLevel=a["activeLogicLevel"], alertOutputPin=a["alertOutput"])
+        for a in config.alerts:
+            self.tc.setAlert(target=a["target"], latching=a["latching"], activeLogicLevel=a["activeLogicLevel"], alertOutputPin=a["alertOutput"])
 
     def mechanicalRelayOff(self):
         #Falsely trigger the temperature alert to turn off the mechanical relay
         self.tc.clearAlert(1)
         self.tc.setAlert(target=-30, latching=False, activeLogicLevel=1, alertOutputPin=1)
 
-    def setModeOff(self):
+    def setModeOff(self, updateOperationFile=False):
+        # Write the change to disk and let the refresh handle it
+        if updateOperationFile:
+            self.operationConfig.setModeOff()
+            return
+
         log.info('Mode -> Off')
         with self.lock:
             self.mode = ControllerMode.OFF
@@ -125,7 +128,12 @@ class PidController(threading.Thread):
 
         return True
 
-    def setModeManual(self, duty):
+    def setModeManual(self, duty, updateOperationFile=False):
+        # Write the change to disk and let the refresh handle it
+        if updateOperationFile:
+            self.operationConfig.setModeManual(duty)
+            return
+
         log.info('Mode -> Manual, Output: {}'.format(duty))
         with self.lock:
             self.mode = ControllerMode.MANUAL
@@ -134,23 +142,28 @@ class PidController(threading.Thread):
             self.enableAlerts()
         return True
 
-    def setModeSetPoint(self, target, rampRatePerHour=0):
+    def setModeSetPoint(self, target, rampRatePerHour=None, updateOperationFile=False):
+        # Write the change to disk and let the refresh handle it
+        if updateOperationFile:
+            self.operationConfig.setModeSetPoint(target, rampRatePerHour)
+            return
+
         log.info('Mode -> SetPoint, Target: {} RampRatePerHour: {}'.format(target, rampRatePerHour))
         with self.lock:
             self.mode = ControllerMode.SETPOINT
             self.modeSetPoint_Target = target
-            self.modeSetPoint_RampRate = rampRatePerHour
-            if rampRatePerHour > 0:
+            self.modeSetPoint_RampRate = 0 if rampRatePerHour is None else rampRatePerHour
+            if self.modeSetPoint_RampRate > 0:
                 self.ramping = True
-                self.ramp = RampStep (self.tc.temperature, target, "rate", rampRatePerHour)
+                self.ramp = RampStep (self.tc.temperature, target, "rate", self.modeSetPoint_RampRate)
             self.enableAlerts()
         return True
 
     def setModeProfile(self, profilename):
-        if profilename not in self.cfgData["profiles"]:
-            self.log.error('Could not start profile {} it is not defined in program.json'.format(name))
+        if profilename not in config.profiles:
+            self.log.error('Could not start profile {} it is not defined'.format(name))
             return False
-        profile = self.cfgData["profiles"][profilename]
+        profile = config.profiles[profilename]
 
         log.info('Mode -> Profile: {}'.format(profilename))
         with self.lock:
@@ -158,9 +171,13 @@ class PidController(threading.Thread):
             self.modeProfile_Name = profilename
             self.modeProfile_Profile = profile
             self.modeProfile_Step = 0
-            self.ramping = True
-            self.ramp = RampStep (self.tc.temperature, self.modeProfile_Profile[self.modeProfile_Step]["target"], self.modeProfile_Profile[self.modeProfile_Step]["type"], self.modeProfile_Profile[self.modeProfile_Step]["value"])
-            self.enableAlerts()
+            self.ramping=False
+            self.ramp=None
+            if self.modeProfile_Profile[self.modeProfile_Step]["type"] != "mode":
+                self.ramping = True
+                self.ramp = RampStep (self.tc.temperature, self.modeProfile_Profile[self.modeProfile_Step]["target"], self.modeProfile_Profile[self.modeProfile_Step]["type"], self.modeProfile_Profile[self.modeProfile_Step]["value"])
+                self.enableAlerts()
+
         return True
 
     def getState(self, shortNames=False):
@@ -168,6 +185,7 @@ class PidController(threading.Thread):
         short = {}
         data["mode"] = short["m"] = str(self.mode)
         data["currentTemperature"] = short["curr"] = round(self.tc.temperature)
+        data["currentColdTemperature"] = short["cold"] = round(self.tc.coldJunction)
         data["currentTarget"] = short["ctgt"] = round(self.pid.setpoint)
         data["ramping"] = short["ramping"] = self.ramping
         data["rmpftgt"] = short["rmpftgt"] = round(self.ramp.finalTarget()) if self.ramping else 0
@@ -215,12 +233,10 @@ class PidController(threading.Thread):
 
     def checkConfig(self):
         #Read any new configuration settings
-        data = self.runtimeConfig.checkForNewConfig()
+        data = self.operationConfig.checkForNewConfig()
         if not data: 
             return
-        log.info('Configuration file program.json updated.')
-
-        self.cfgData = data
+        log.info('Configuration file updated.')
 
         if data["mode"]=="OFF":
             self.setModeOff()
@@ -259,19 +275,39 @@ class PidController(threading.Thread):
                     self.dutyCycle = self.pid(self.tc.temperature)
 
                 if self.mode == ControllerMode.PROFILE:
-                    self.pid.setpoint = self.modeProfile_Profile[-1]["target"]
                     if self.ramping:
-                        if not self.ramp.isComplete():
-                            self.pid.setpoint = self.ramp.currentTarget()
-                        else:
+                        self.pid.setpoint = self.ramp.currentTarget()
+                        if self.ramp.isComplete():
                             self.modeProfile_Step=self.modeProfile_Step+1
-                            if self.modeProfile_Step<len(self.modeProfile_Profile):
-                                self.ramp = RampStep (self.tc.temperature, self.modeProfile_Profile[self.modeProfile_Step]["target"], self.modeProfile_Profile[self.modeProfile_Step]["type"], self.modeProfile_Profile[self.modeProfile_Step]["value"])
-                                self.pid.setpoint = self.ramp.currentTarget()
+                            if self.modeProfile_Step < len(self.modeProfile_Profile):
+                                if self.modeProfile_Profile[self.modeProfile_Step]["type"]!="mode":
+                                    #Set the start value to the prior ramp steps target value, this prevents a lagging oven from starting ramps from the wrong temperature
+                                    self.ramp = RampStep (self.modeProfile_Profile[self.modeProfile_Step-1]["target"], self.modeProfile_Profile[self.modeProfile_Step]["target"], self.modeProfile_Profile[self.modeProfile_Step]["type"], self.modeProfile_Profile[self.modeProfile_Step]["value"])
+                                    self.pid.setpoint = self.ramp.currentTarget()                                    
                             else:
+                                self.modeProfile_Step=self.modeProfile_Step-1
                                 self.ramping=False
                                 self.ramp=None
                     self.dutyCycle = self.pid(self.tc.temperature)
+
+            #Outside of the lock, check for mode transitions, do these to the disk so they
+            if self.mode == ControllerMode.PROFILE:
+                if self.modeProfile_Profile[self.modeProfile_Step].type=="mode":
+                    md = self.modeProfile_Profile[self.modeProfile_Step]["value"]
+                    if md=="off":
+                        self.operationConfig.setModeOff(updateOperationFile=True)
+                    elif md == "manual":
+                        self.operationConfig.setModeManual(self.modeProfile_Profile[self.modeProfile_Step]["target"], updateOperationFile=True)
+                    elif md == "setpoint":
+                        self.operationConfig.setModeSetPoint(self.modeProfile_Profile[self.modeProfile_Step]["target"], updateOperationFile=True)
+                    elif md=="profile":
+                        profname = self.modeProfile_Profile[self.modeProfile_Step]["target"]
+                        if not self.setModeProfile(profname):
+                            log.error("Attemp to transition to unknown profile {}".format(profname))
+                            self.setModeOff()
+                    else:
+                        log.error("Unknown profile type {}".format(md))
+                        self.setModeOff()
 
             #Handle the hotpins, do this outside of the lock as this really is constant work,
             carryOverTime = self.applyOutput(syncStartTime, carryOverTime, self.dutyCycle)

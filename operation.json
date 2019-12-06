@@ -1,0 +1,5 @@
+{
+    "mode": "MANUAL",
+    "manualOutput" : 0.1,
+    "setpointTarget" : 1000
+}
