@@ -39,7 +39,6 @@ class OperationConfig:
 
         self.validateNumberSetting(data, "manualOutput", errors, (0,1))
         self.validateNumberSetting(data, "setpointTarget", errors)
-        self.validateNumberSetting(data, "rampRatePerHour", errors)
 
         if len(errors):
             for err in errors: 
@@ -50,8 +49,9 @@ class OperationConfig:
         self.lastConfigUpdate = None
 
     def writeConfigToDisk (self):
+        #print(json.dumps(self.data))
         with open(self.configPath, 'w') as outfile:
-            json.dump(data, outfile)
+            json.dump(self.data, outfile)
         self.reset()
 
     def readConfigFromDisk (self):
@@ -65,7 +65,7 @@ class OperationConfig:
 
     def checkForNewConfig (self):
         newt = os.path.getmtime(self.configPath)
-        if newt > self.lastConfigUpdate:
+        if self.lastConfigUpdate is None or newt > self.lastConfigUpdate:
             return self.readConfigFromDisk()
         return None
 

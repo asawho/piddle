@@ -11,6 +11,7 @@ log = logging.getLogger()
 class TempSensor:
     def __init__(self, timeout=config.bad_thermocouple_read_timeout):
         self.temperature = 0
+        self.coldJunction = 0
         self.failStart = 0
         self.failTimeout = timeout
 
@@ -18,9 +19,9 @@ class TempSensor:
         self.thermocouple._mcp9600.set('DEVICE_CONFIG', cold_junction_resolution=0.0625, adc_resolution=18, burst_mode_samples=1, shutdown_modes='Normal')
         self.thermocouple._mcp9600.set('THERMOCOUPLE_CONFIG', type_select=config.thermocouple_type, filter_coefficients=config.mcp9600_filter_coefficient)
         status=self.thermocouple._mcp9600.get('DEVICE_CONFIG')
-        log.info('MCP960 Config: {} {} {}'.format(status.cold_junction_resolution, status.adc_resolution))
+        log.info('MCP9600 Config-> CJ Resolution: {} ADC Resolution: {}'.format(status.cold_junction_resolution, status.adc_resolution))
         status=self.thermocouple._mcp9600.get('THERMOCOUPLE_CONFIG')
-        log.info('MCP960 Config: {} {}'.ormat(status.thermocouple_type, status.filter_coefficients))
+        log.info('MCP9600 Config-> Thermocouple: {} Filter: {}'.format(status.type_select, status.filter_coefficients))
         for x in range(1, 5):
             self.thermocouple.clear_alert(x)
             self.thermocouple.configure_alert(x, enable=False)
@@ -40,9 +41,11 @@ class TempSensor:
     def update(self):
         try:
             temp = self.thermocouple.get_hot_junction_temperature()
-            if config.mcp9600:
-                temp = temp*9.0/5.0 + 32
+            temp = temp*9.0/5.0 + 32
             self.temperature = temp 
+            temp = self.thermocouple.get_cold_junction_temperature()
+            temp = temp*9.0/5.0 + 32
+            self.coldJunction = temp 
             self.failStart=None
         #After 60 fails, 
         except Exception:

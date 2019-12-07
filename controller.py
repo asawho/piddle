@@ -145,14 +145,14 @@ class PidController(threading.Thread):
     def setModeSetPoint(self, target, rampRatePerHour=None, updateOperationFile=False):
         # Write the change to disk and let the refresh handle it
         if updateOperationFile:
-            self.operationConfig.setModeSetPoint(target, rampRatePerHour)
+            self.operationConfig.setModeSetPoint(target)
             return
 
         log.info('Mode -> SetPoint, Target: {} RampRatePerHour: {}'.format(target, rampRatePerHour))
         with self.lock:
             self.mode = ControllerMode.SETPOINT
             self.modeSetPoint_Target = target
-            self.modeSetPoint_RampRate = 0 if rampRatePerHour is None else rampRatePerHour
+            self.modeSetPoint_RampRate = config.rampRatePerHour if rampRatePerHour is None else rampRatePerHour
             if self.modeSetPoint_RampRate > 0:
                 self.ramping = True
                 self.ramp = RampStep (self.tc.temperature, target, "rate", self.modeSetPoint_RampRate)
@@ -160,8 +160,9 @@ class PidController(threading.Thread):
         return True
 
     def setModeProfile(self, profilename):
+        #print(profilename, config.profiles)
         if profilename not in config.profiles:
-            self.log.error('Could not start profile {} it is not defined'.format(name))
+            log.error('Could not start profile {} it is not defined'.format(profilename))
             return False
         profile = config.profiles[profilename]
 
@@ -188,6 +189,7 @@ class PidController(threading.Thread):
         data["currentColdTemperature"] = short["cold"] = round(self.tc.coldJunction)
         data["currentTarget"] = short["ctgt"] = round(self.pid.setpoint)
         data["ramping"] = short["ramping"] = self.ramping
+        data["profileName"] = short["profile"] = self.modeProfile_Name if self.mode==ControllerMode.PROFILE else ''
         data["rmpftgt"] = short["rmpftgt"] = round(self.ramp.finalTarget()) if self.ramping else 0
         data["rmpftime"]= short["rmpftime"] = datetime.datetime.fromtimestamp(self.ramp.finalTime()).strftime("%H:%M:%S") if self.ramping else 0
         data["output"] = short["out"] = round(self.dutyCycle, 2)
@@ -243,7 +245,7 @@ class PidController(threading.Thread):
         if data["mode"]=="MANUAL":
             self.setModeManual(data["manualOutput"])
         if data["mode"]=="SETPOINT":
-            self.setModeSetPoint(data["setpointTarget"], data["rampRatePerHour"])
+            self.setModeSetPoint(data["setpointTarget"], config.rampRatePerHour)
 
     def run_forever(self):
         #Start the synchro timer, try and make it an even second to start
@@ -292,7 +294,7 @@ class PidController(threading.Thread):
 
             #Outside of the lock, check for mode transitions, do these to the disk so they
             if self.mode == ControllerMode.PROFILE:
-                if self.modeProfile_Profile[self.modeProfile_Step].type=="mode":
+                if self.modeProfile_Profile[self.modeProfile_Step]["type"]=="mode":
                     md = self.modeProfile_Profile[self.modeProfile_Step]["value"]
                     if md=="off":
                         self.operationConfig.setModeOff(updateOperationFile=True)

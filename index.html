@@ -1,5 +1,130 @@
 <html>
     <body>
-        <H1>Hello</H1>
+        <div id="root"></div>   
+        
+        <script src="https://unpkg.com/react@16/umd/react.production.min.js" crossorigin></script>
+        <script src="https://unpkg.com/react-dom@16/umd/react-dom.production.min.js" crossorigin></script>
+        <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+        <script type="text/babel">
+            class Readout extends React.Component {
+
+                constructor(props) {
+                    super(props);
+                    this.state = {
+                        online : false,                 
+                        error : '',
+                        mode: '',
+                        currentTemperature : 0,
+                        currentColdTemperature : 0,
+                        currentTarget: 0,
+                        ramping : false,
+                        profileName : '',
+                        rmpftgt : '',
+                        rmpftime : '',
+                        output : 0,
+                        pp:0,
+                        pi:0,
+                        pd:0
+                    };
+                    this.baseURL = "http://" + this.props.hostname + ":8080"
+                    this.queryTimer = undefined;
+                }
+
+                getServerState() {
+                    //Do it again in 5 seconds
+                    if (this.queryTimer) clearTimeout(this.queryTimer);
+                    this.queryTimer=setTimeout(this.getServerState.bind(this), 1000*5);
+
+                    //Fetch the results
+                    return fetch(this.baseURL + '/state').then((res) => {
+                        if (res.status==200) {
+                            res.json().then((data) => {
+                                this.setState ({ 
+                                    online : true,                 
+                                    error : '',
+                                    mode: data.mode,
+                                    currentTemperature : data.currentTemperature,
+                                    currentColdTemperature : data.currentColdTemperature,
+                                    currentTarget: data.currentTarget,
+                                    ramping : data.ramping,
+                                    profileName : data.profileName,
+                                    rmpftgt : data.rmpftgt,
+                                    rmpftime : data.rmpftime,
+                                    output : data.output,
+                                    pp:data.pp,
+                                    pi:data.pi,
+                                    pd:data.pd
+                                });
+                            });					
+                        } 
+                        else if (res.status==500) {
+                            this.setState ({ 
+                                error: '500: ' + res.body
+                            })
+                        }				
+                    }, (err) => { 
+                        this.setState ({ 
+                            online: false,
+                            error: 'Error: ' + err
+                        })
+                    }).catch((res) => {
+                        this.setState ({ 
+                            online: false,
+                            error: 'Error: ' + res
+                        })
+                    });
+                }
+                
+                componentDidMount() {
+                    //Kick off getting the server state
+                    this.getServerState();
+                }
+
+                componentWillUnmount() {
+                    if (this.queryTimer) clearTimeout(this.queryTimer);
+                }
+
+                render() {
+                    let contents = <div />;
+                    if (this.state.online) {
+                        contents = <div>
+                            <h2>{this.props.hostname}</h2>
+                            <div>Mode: {this.state.mode}</div>
+                            <div>Target: {this.state.currentTarget}F Temperature: {this.state.currentTemperature}F</div>
+                            <div>Profile: {this.state.profileName }</div>
+                            <div>Error: {}</div>
+                        </div>        
+                    } else {
+                        contents = <div>
+                            <h2>{this.props.hostname}</h2>
+                            <div>Offline - {this.state.error}</div>
+                        </div>   
+                    }
+
+                    return (contents);
+                }
+            }
+
+            class Application extends React.Component {
+                constructor(props) {
+                    super(props);
+                }
+
+                render() {
+                    return (
+                        <div>
+                            <Readout hostname="furnace" />
+                            <Readout hostname="annealer" />
+                            <Readout hostname="warmer" />
+                        </div>
+                    );
+                }                
+            }
+
+            ReactDOM.render(
+                <Application />,
+                document.getElementById('root')
+            );
+        </script>
     </body>
 </html>

@@ -62,8 +62,8 @@ def validateAlerts(alerts, errors):
         if "alertOutput" not in value:
             errors.append("Alert {} has no alertOutput set.".format(index))
 
-validateProfiles(config.profiles)
-validateAlerts(config.alerts)
+validateProfiles(config.profiles, errors)
+validateAlerts(config.alerts, errors)
 if len(errors):
     for err in errors: 
         self.log.error(err)
@@ -74,16 +74,16 @@ ctrl = controller.PidController()
 
 #Setup the web API------------------------------------------------
 app = bottle.Bottle()
-@bottle.route('/')
+@app.route('/')
 def indexHTML():
     return bottle.static_file('index.html', root='./')
 
-@bottle.route('/mode/off')
+@app.route('/mode/off')
 def setModeOff():
     ctrl.setModeOff(updateOperationFile=True)
     return { "msg" : 'Mode -> Off' }
 
-@bottle.route('/mode/manual/<output>')
+@app.route('/mode/manual/<output>')
 def setModeManual(output):
     try:
         output=float(output)
@@ -94,7 +94,7 @@ def setModeManual(output):
     ctrl.setModeManual (output, updateOperationFile=True)
     return { "msg" : 'Mode -> Manual, Output: {}'.format(output) }
 
-@bottle.route('/mode/setpoint/<setpoint>')
+@app.route('/mode/setpoint/<setpoint>')
 def setModeManual(setpoint):
     try:
         setpoint=float(setpoint)
@@ -103,14 +103,14 @@ def setModeManual(setpoint):
         return { "msg" : 'Could not convert setpoint value {} to float.'.format(setpoint) }    
 
     ctrl.setModeSetPoint (setpoint, updateOperationFile=True)
-    return { "msg" : 'Mode -> Manual, Output: {}'.format(output) }
+    return { "msg" : 'Mode -> Setpoint, Target: {}'.format(setpoint) }
 
-@bottle.route('/mode/profile/stop')
+@app.route('/mode/profile/stop')
 def webStopProfile():
     ctrl.resetToConfig()
     return { "msg" : 'Profile stopped' }
 
-@bottle.route('/mode/profile/start/<name>')
+@app.route('/mode/profile/start/<name>')
 def webStartProfile(name):
     if ctrl.setModeProfile(name):
         return { "msg" : 'Profile started' }
@@ -118,12 +118,12 @@ def webStartProfile(name):
         bottle.response.status=500
         return { "msg" : 'Unknown profile, could not start' }
     
-@bottle.route('/state')
+@app.route('/state')
 def webState():
     return json.dumps(ctrl.getState())
 
 #Start it in daemon mode so that the web app dies when the pid loop does
-threading.Thread(target=app.run, kwargs=dict(host=config.listening_ip, port=config.listening_port), daemon=True).start()
+threading.Thread(target=app.run, kwargs=dict(host=config.listening_ip, port=config.listening_port, quiet=True), daemon=True).start()
 
 #Start the controller, make dang sure it is off at the end-------------------------------
 try:
