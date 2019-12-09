@@ -184,17 +184,19 @@ class PidController(threading.Thread):
     def getState(self, shortNames=False):
         data = {}
         short = {}
-        data["mode"] = short["m"] = str(self.mode)
+        #Strip out the 'ControllerMode.' from the string
+        data["mode"] = short["m"] = str(self.mode)[str(self.mode).index('.')+1:]
         data["currentTemperature"] = short["curr"] = round(self.tc.temperature)
         data["currentColdTemperature"] = short["cold"] = round(self.tc.coldJunction)
         data["currentTarget"] = short["ctgt"] = round(self.pid.setpoint)
         data["ramping"] = short["ramping"] = self.ramping
         data["profileName"] = short["profile"] = self.modeProfile_Name if self.mode==ControllerMode.PROFILE else ''
+        data["profiles"] = short["profiles"] = config.profiles
         data["rmpftgt"] = short["rmpftgt"] = round(self.ramp.finalTarget()) if self.ramping else 0
         data["rmpftime"]= short["rmpftime"] = datetime.datetime.fromtimestamp(self.ramp.finalTime()).strftime("%H:%M:%S") if self.ramping else 0
         data["output"] = short["out"] = round(self.dutyCycle, 2)
         data["pp"], data["pi"], data["pd"] = round(self.pid.components[0],3), round(self.pid.components[1],3), round(self.pid.components[2],3)
-        short["pp"], short["pi"], short["pd"] = round(self.pid.components[0],3), round(self.pid.components[1],3), round(self.pid.components[2],3)
+        short["pp"], short["pi"], short["pd"] = round(self.pid.components[0],3), round(self.pid.components[1],3), round(self.pid.components[2],3)        
         return(short if shortNames else data)
 
     #What this essentially does it takes the duty cycle and it flips the SSR on/off

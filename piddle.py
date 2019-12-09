@@ -76,7 +76,11 @@ ctrl = controller.PidController()
 app = bottle.Bottle()
 @app.route('/')
 def indexHTML():
-    return bottle.static_file('index.html', root='./')
+    return bottle.static_file('index.html', root='./public')
+
+@app.route('/assets/<filepath:path>')
+def server_static(filepath):
+    return bottle.static_file(filepath, root='./public/assets')
 
 @app.route('/mode/off')
 def setModeOff():

@@ -1,0 +1,7 @@
+@font-face{
+    font-family: "Digi";
+    src: url('/assets/fonts/digital-7-webfont.eot');
+    src: local("Digital 7"),
+    url('/assets/fonts/digital-7-webfont.woff') format("woff"),
+    url('/assets/fonts/digital-7-webfont.ttf') format("truetype");
+}

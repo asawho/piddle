@@ -19,14 +19,14 @@ hostname = os.uname()[1].lower()
 # --------------------------------------------------------------------------------------------------------
 
 #  Logging frequency in seconds
-log_frequency = 1
+log_frequency = 30
 
 # Server
 listening_ip = "0.0.0.0"
 listening_port = 8080
 
 # Main loop duration in seconds
-sensor_time_wait = 30
+sensor_time_wait = 1
 
 #   PID parameters
 pid_kp = 0.03          # Proportional

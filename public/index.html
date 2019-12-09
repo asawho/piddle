@@ -1,0 +1,297 @@
+<html>
+    <head>        
+        <title>Piddle</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+        <link rel="stylesheet" href="assets/site.css"/>        
+    </head>
+    <body>
+        <div class="container" id="root"></div>   
+        
+        <script src="https://unpkg.com/react@16/umd/react.production.min.js" crossorigin></script>
+        <script src="https://unpkg.com/react-dom@16/umd/react-dom.production.min.js" crossorigin></script>
+        <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+        <script type="text/babel">
+            class Readout extends React.Component {
+
+                constructor(props) {
+                    super(props);
+                    this.state = {
+                        online : false,                 
+                        error : '',
+                        mode: '',
+                        currentTemperature : 0,
+                        currentColdTemperature : 0,
+                        currentTarget: 0,
+                        ramping : false,
+                        profileName : '',
+                        rmpftgt : '',
+                        rmpftime : '',
+                        output : 0,
+                        pp:0,
+                        pi:0,
+                        pd:0,
+                        profiles:[],
+                        proposedMode:'',
+                        proposedProfile:'',
+                        proposedOutput:'',
+                        proposedSetpoint:''
+                    };
+                    this.baseURL = "http://" + this.props.hostname + ":8080"
+                    this.queryTimer = undefined;
+                }
+
+                getServerState(firstCall) {
+                    //Do it again in 5 seconds
+                    if (this.queryTimer) clearTimeout(this.queryTimer);
+                    this.queryTimer=setTimeout(this.getServerState.bind(this), 1000*5);
+
+                    //Fetch the results
+                    return fetch(this.baseURL + '/state').then((res) => {
+                        if (res.status==200) {
+                            res.json().then((data) => {
+                                this.setState ({ 
+                                    online : true,                 
+                                    error : '',
+                                    mode: (data.mode || '').toLowerCase(),
+                                    currentTemperature : data.currentTemperature,
+                                    currentColdTemperature : data.currentColdTemperature,
+                                    currentTarget: data.currentTarget,
+                                    ramping : data.ramping,                                    
+                                    profileName : data.profileName,
+                                    profiles:data.profiles,
+                                    rmpftgt : data.rmpftgt,
+                                    rmpftime : data.rmpftime,
+                                    output : data.output,
+                                    pp:data.pp,
+                                    pi:data.pi,
+                                    pd:data.pd
+                                });
+                                if (firstCall) {
+                                    let mode = (data.mode || '').toLowerCase();
+                                    this.setState ({ 
+                                        proposedMode : mode
+                                    });
+                                    if (mode=='manual') {
+                                        this.setState ({ 
+                                            proposedOutput : data.output
+                                        });
+                                    }
+                                    if (mode=='setpoint') {
+                                        this.setState ({ 
+                                            proposedSetpoint : data.currentTarget
+                                        });
+                                    }
+                                    if (mode=='profile') {
+                                        this.setState ({ 
+                                            proposedProfile : data.profileName
+                                        });
+                                    }                                                                      
+                                }
+                            });					
+                        } 
+                        else if (res.status==500) {
+                            this.setState ({ 
+                                error: '500: ' + res.body
+                            })
+                        }				
+                    }, (err) => { 
+                        this.setState ({ 
+                            online: false,
+                            error: 'Error: ' + err
+                        })
+                    }).catch((res) => {
+                        this.setState ({ 
+                            online: false,
+                            error: 'Error: ' + res
+                        })
+                    });
+                }
+                
+                componentDidMount() {
+                    //Kick off getting the server state
+                    this.getServerState(true);
+                }
+
+                componentWillUnmount() {
+                    if (this.queryTimer) clearTimeout(this.queryTimer);
+                }
+
+                updateModeSettings = updateModeSettingsBound => {
+                    this.setState({ updateError: '' });
+                    let url = this.baseURL;
+                    if (this.state.proposedMode=='off') {
+                        url = url + '/mode/off';
+                    }
+                    else if (this.state.proposedMode=='manual') {
+                        url = url + '/mode/manual/' + this.state.proposedOutput;
+                    }
+                    else if (this.state.proposedMode=='setpoint') {
+                        url = url + '/mode/setpoint/'+ this.state.proposedSetpoint;
+                    }
+                    else if (this.state.proposedMode=='profile') {
+                        url = url + '/mode/profile/start/' + this.state.proposedProfile;
+                    }
+                    return (fetch(url).then((res) => {
+                        if (res.status!=200) {
+                            res.json().then((data) => {
+                                this.setState({ updateError: data.msg });
+                                })
+                        }}, (err) => {
+                            this.setState({ updateError: err });
+                        }));
+                };
+
+                cancelUpdate = cancelUpdateBound => {
+                    this.setState ({ 
+                        proposedMode : this.state.mode,
+                        proposedProfile : this.state.profileName,
+                        proposedOutput : this.state.output,
+                        proposedSetpoint : this.state.currentTarget,
+                        updateError: ''                                        
+                    }); 
+                };
+
+                handleModeChange = changeEvent => {
+                    this.setState({
+                        proposedMode: changeEvent.target.value
+                    });
+                };
+
+                handleInputChange = genericEvent => {
+                    const target = event.target;
+                    const value = target.type === 'checkbox' ? target.checked : target.value;
+                    const name = target.name;
+
+                    //Handle the change
+                    switch (name) {
+                        //case "filterDaySelected": 
+                        //    this.setState({ [name]: value });
+                        //    break;
+                        default:
+                            this.setState({ [name]: value });
+                    }	
+                };
+
+                render() {
+                    let inputNames="";
+
+                    //Header----
+                    let contents = [<h2 className="text-light rounded-lg bg-secondary border border-dark" style={{textAlign: 'center', paddingBottom:'0.2em'}}>{this.props.hostname} - {this.state.online ? 'online' : 'offline'}</h2>];
+                    //Temperatures---
+                    if (this.state.online) {
+                        //contents.push(<div>Mode: {this.state.mode}</div>)
+                        contents.push(<div className="row">
+                            <div className="col">
+                                <span style={{fontFamily: 'Digi', fontSize: '2em'}}>Tgt:</span>
+                                <span style={{fontFamily: 'Digi', fontSize: '3em', color:"green"}}>{this.state.currentTarget}</span>
+                            </div>
+                            <div className="col">
+                                <span style={{fontFamily: 'Digi', fontSize: '2em'}}>Cur:</span>
+                                <span style={{fontFamily: 'Digi', fontSize: '3em', color:"red"}}>{this.state.currentTemperature}</span>
+                            </div>
+                        </div>);
+                    } 
+                    
+                    if (!this.state.online || this.state.updateError) {
+                        contents.push(<div className="alert alert-danger" role="alert">{this.state.error || this.state.updateError}</div>);
+                    }
+
+                    //Mode---
+                    let modes = ['off','manual','setpoint','profile'];
+                    let tmp = modes.map((x) => { return x})
+                    tmp = modes.map((x) => {
+                        return <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name={"mode"+this.props.hostname} value={x} checked={this.state.proposedMode === x} onChange={this.handleModeChange} />
+                            <label class="form-check-label" for={x}>{x}</label>
+                        </div>
+                    });
+                    contents.push(<div className="form-row">{ tmp }</div>);
+
+                    //Mode Values--
+                    if (this.state.proposedMode=='off') {
+                        //Do nothing
+                    }
+                    else if (this.state.proposedMode=='manual') {                        
+                        contents.push(<div class="form-group row">
+                            <label for="manualOutput" class="col col-form-label">Output</label>
+                            <div class="col">
+                                <input class="form-control" name="proposedOutput" placeholder="Output Level 0 to 1" value={this.state.proposedOutput} onChange={this.handleInputChange}/>
+                            </div>
+                        </div>)
+                    }
+                    else if (this.state.proposedMode=='setpoint') {
+                        contents.push(<div class="form-group row">
+                            <label for="setpoint" class="col-sm-4 col-form-label">Set Point</label>
+                            <div class="col-sm-8">
+                                <input class="form-control" name="proposedSetpoint" placeholder="Target Temperature" value={this.state.proposedSetpoint} onChange={this.handleInputChange} />
+                            </div>
+                        </div>)                        
+                    }
+                    else if (this.state.proposedMode=='profile') {
+                        let names = Object.keys(this.state.profiles);
+                        tmp = names.map((x) => {
+                            return <option value={x}>{x}</option>
+                        })
+                        contents.push(<div class="form-group row">
+                            <label for="profile" class="col-sm-4 col-form-label">Profile</label>
+                            <div class="col-sm-8">
+                                <select value={this.state.proposedProfile} name="proposedProfile" class="form-control" onChange={this.handleInputChange}>
+                                    <option value="">Select...</option>
+                                    {tmp}
+                                </select>                            
+                            </div>
+                        </div>)                          
+                    }
+
+                    //Submit proposed changes
+                    let changed=this.state.proposedMode != this.state.mode ||
+                        (this.state.mode=='manual' && this.state.proposedOutput != this.state.output) ||
+                        (this.state.mode=='setpoint' && this.state.proposedSetpoint != this.state.currentTarget) ||
+                        (this.state.mode=='profile' && this.state.proposedProfileName != this.state.profileName);
+                    if (changed) {
+                        contents.push(<div class="form-group row">
+                            <div class="col">
+                                <input type="button" value="Update Settings" onClick={this.updateModeSettings} />
+                                <input type="button" value="Cancel" onClick={this.cancelUpdate} />
+                            </div>
+                        </div>)
+                    }
+
+                    return (<div className="col-md-4">{contents}</div>)
+                    return (
+                        <div className="form-row">
+                            <div className="col">
+                                <input type="text" className="form-control" placeholder="First name" />
+                            </div>
+                            <div class="col">
+                                <input type="text" className="form-control" placeholder="Last name" />
+                            </div>
+                        </div>
+                    )
+                }
+            }
+
+            class Application extends React.Component {
+                constructor(props) {
+                    super(props);
+                }
+
+                render() {
+                    return (
+                        <div className="row">
+                            <Readout hostname="furnace" />
+                            <Readout hostname="annealer" />
+                            <Readout hostname="warmer" />
+                        </div>
+                    );
+                }                
+            }
+
+            ReactDOM.render(
+                <Application />,
+                document.getElementById('root')
+            );
+        </script>
+    </body>
+</html>
