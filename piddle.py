@@ -91,20 +91,24 @@ def setModeOff():
 def setModeManual(output):
     try:
         output=float(output)
+        if output < 0 or output > 1:
+            raise Exception
     except:
         bottle.response.status=500
-        return { "msg" : 'Could not convert manual output value to float' }    
+        return { "msg" : 'Could not convert manual output value to float between 0 and 1.' }    
 
     ctrl.setModeManual (output, updateOperationFile=True)
     return { "msg" : 'Mode -> Manual, Output: {}'.format(output) }
 
 @app.route('/mode/setpoint/<setpoint>')
-def setModeManual(setpoint):
+def setModeSetpoint(setpoint):
     try:
         setpoint=float(setpoint)
+        if setpoint < 0 or setpoint > 2350:
+            raise Exception
     except:
         bottle.response.status=500
-        return { "msg" : 'Could not convert setpoint value {} to float.'.format(setpoint) }    
+        return { "msg" : 'Could not convert setpoint value {} to float between 0 and 2350.'.format(setpoint) }    
 
     ctrl.setModeSetPoint (setpoint, updateOperationFile=True)
     return { "msg" : 'Mode -> Setpoint, Target: {}'.format(setpoint) }
@@ -125,6 +129,10 @@ def webStartProfile(name):
 @app.route('/state')
 def webState():
     return json.dumps(ctrl.getState())
+
+@app.route('/servers')
+def webServers():
+    return json.dumps(config.serverlist)
 
 #Start it in daemon mode so that the web app dies when the pid loop does
 threading.Thread(target=app.run, kwargs=dict(host=config.listening_ip, port=config.listening_port, quiet=True), daemon=True).start()

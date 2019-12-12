@@ -38,12 +38,17 @@ pid_kd = 0.0           # Derivative
 # of the total power.  So for two pins, each pin would control 50% of the power.  
 # Power is automatically distributed between the pins so no one element is disproportionately
 # loaded.
+#
 # The primary purpose in having multiple pins is to be able to "feather" the power
 # and avoid flickering lights for high current devices.
+#
+# If this list is empty, this device is considered a monitor and nothing will be controlled.
+# You do need it to still be an empty list if there are none, so = []
 gpio_heat = [23]
 
 #Thermocouple type 
 thermocouple_type = 'K'
+
 #Minimum filtering on the chip
 mcp9600_filter_coefficient = 0b001
 
@@ -63,21 +68,24 @@ alerts= [
     { "target": 212, "latching": True, "activeLogicLevel": 0, "alertOutput": 1 }
 ]
 
-#What profiles do I know, of the format 
+# These profiles are shared between all networked temperature controllers, so there is no need for duplication if
+# multiple controllers share the same profiles.
+#
+# What profiles do I know, of the format 
 #  "name" : [steps]
-#Where each step is of the format
+# Where each step is of the format
 #  { "target": temperature, "type": 'rate' or 'time' or 'mode', "value": value for the type }
-#So for example, the following will ramp to 1000F at a rate of 100F per hour
+# So for example, the following will ramp to 1000F at a rate of 100F per hour
 #  { "target": 1000, "type": 'rate', "value": 100 }
-#Another example, the following will ramp to 1000F in one hour
+# Another example, the following will ramp to 1000F in one hour
 #  { "target": 1000, "type": 'time', "value": 1 }
-#Another example, the following will transition to setpoint mode targeting 1000 (this will update operation.json)
+# Another example, the following will transition to setpoint mode targeting 1000 (this will update operation.json)
 #  { "target": 1000, "type": 'mode', "value": 'setpoint' }
-#Another example, the following will transition to manual mode with 0.5 output power (this will update operation.json)
+# Another example, the following will transition to manual mode with 0.5 output power (this will update operation.json)
 #  { "target": 0.5, "type": 'mode', "value": 'manual' }
-#Another example, the following will transition to the 'anneal' profile
+# Another example, the following will transition to the 'anneal' profile
 #  { "target": 'anneal', "type": 'mode', "value": 'profile' }
-#Another example, the following will transition to off
+# Another example, the following will transition to off
 #  { "type": 'mode', "value": 'off' }
 profiles= { 
     #"default" : [
@@ -94,6 +102,13 @@ profiles= {
         { "target": 50, "type": "time", "value": 0.5 }
     ]
 }    
+
+### --------------------------------------------------------------------------------------------------------
+# List of servers on this network that will take part in watchdog and be displayed in the web interface
+# It is not necessary to have any servers in this list.
+serverlist=['furnace','annealer','warmer']
+if hostname not in serverlist:
+    serverlist.append(hostname)
 
 ### Configuration Values for Specific Instances-------------------------------------------------------------
 ### --------------------------------------------------------------------------------------------------------

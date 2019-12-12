@@ -23,21 +23,24 @@
                         currentTemperature : 0,
                         currentColdTemperature : 0,
                         currentTarget: 0,
+                        currentOutput: 0,
                         ramping : false,
+                        rampTarget : '',
+                        rampTime : '',
                         profileName : '',
-                        rmpftgt : '',
-                        rmpftime : '',
-                        output : 0,
+                        profileStep : 0,
                         pp:0,
                         pi:0,
                         pd:0,
-                        profiles:[],
+                        cfgManualOutput : 0,
+                        cfgSetpoint : 0,
+                        cfgProfiles:[],
                         proposedMode:'',
                         proposedProfile:'',
                         proposedOutput:'',
                         proposedSetpoint:''
                     };
-                    this.baseURL = "http://" + this.props.hostname + ":8080"
+                    this.baseURL = "http://" + (navigator.appVersion.indexOf("Win")!=-1 ? this.props.hostname : this.props.hostname + '.local') + ":8080"
                     this.queryTimer = undefined;
                 }
 
@@ -57,36 +60,28 @@
                                     currentTemperature : data.currentTemperature,
                                     currentColdTemperature : data.currentColdTemperature,
                                     currentTarget: data.currentTarget,
+                                    currentOutput: data.currentOutput,
                                     ramping : data.ramping,                                    
+                                    rampTarget : data.rampTarget,
+                                    rampTime : data.rampTime,
+                                    profileStep : data.profileStep,
                                     profileName : data.profileName,
-                                    profiles:data.profiles,
-                                    rmpftgt : data.rmpftgt,
-                                    rmpftime : data.rmpftime,
-                                    output : data.output,
                                     pp:data.pp,
                                     pi:data.pi,
-                                    pd:data.pd
+                                    pd:data.pd,
+
+                                    cfgProfiles : data.cfgProfiles,
+                                    cfgManualOutput : data.cfgManualOutput,
+                                    cfgSetpoint : data.cfgSetpoint
                                 });
                                 if (firstCall) {
                                     let mode = (data.mode || '').toLowerCase();
                                     this.setState ({ 
-                                        proposedMode : mode
-                                    });
-                                    if (mode=='manual') {
-                                        this.setState ({ 
-                                            proposedOutput : data.output
-                                        });
-                                    }
-                                    if (mode=='setpoint') {
-                                        this.setState ({ 
-                                            proposedSetpoint : data.currentTarget
-                                        });
-                                    }
-                                    if (mode=='profile') {
-                                        this.setState ({ 
-                                            proposedProfile : data.profileName
-                                        });
-                                    }                                                                      
+                                        proposedMode : mode,
+                                        proposedOutput : data.cfgManualOutput,
+                                        proposedSetpoint : data.cfgSetpoint,
+                                        proposedProfile : data.profileName
+                                    });                                                                     
                                 }
                             });					
                         } 
@@ -130,6 +125,10 @@
                         url = url + '/mode/setpoint/'+ this.state.proposedSetpoint;
                     }
                     else if (this.state.proposedMode=='profile') {
+                        if (!this.state.proposedProfile) {
+                            this.setState({ updateError: 'Please select a profile.' })
+                            return;
+                        }
                         url = url + '/mode/profile/start/' + this.state.proposedProfile;
                     }
                     return (fetch(url).then((res) => {
@@ -146,8 +145,8 @@
                     this.setState ({ 
                         proposedMode : this.state.mode,
                         proposedProfile : this.state.profileName,
-                        proposedOutput : this.state.output,
-                        proposedSetpoint : this.state.currentTarget,
+                        proposedOutput : this.state.cfgManualOutput,
+                        proposedSetpoint : this.state.cfgSetpoint,
                         updateError: ''                                        
                     }); 
                 };
@@ -177,20 +176,41 @@
                     let inputNames="";
 
                     //Header----
-                    let contents = [<h2 className="text-light rounded-lg bg-secondary border border-dark" style={{textAlign: 'center', paddingBottom:'0.2em'}}>{this.props.hostname} - {this.state.online ? 'online' : 'offline'}</h2>];
+                    let contents = [<h2 className="text-light bg-secondary border border-dark" style={{textAlign: 'center', paddingBottom:'0.2em'}}>{this.props.hostname} - {this.state.online ? 'online' : 'offline'}</h2>];
                     //Temperatures---
                     if (this.state.online) {
-                        //contents.push(<div>Mode: {this.state.mode}</div>)
-                        contents.push(<div className="row">
-                            <div className="col">
-                                <span style={{fontFamily: 'Digi', fontSize: '2em'}}>Tgt:</span>
-                                <span style={{fontFamily: 'Digi', fontSize: '3em', color:"green"}}>{this.state.currentTarget}</span>
-                            </div>
-                            <div className="col">
-                                <span style={{fontFamily: 'Digi', fontSize: '2em'}}>Cur:</span>
-                                <span style={{fontFamily: 'Digi', fontSize: '3em', color:"red"}}>{this.state.currentTemperature}</span>
-                            </div>
-                        </div>);
+                        contents.push(<table style={{ width: '100%'}}>
+                            <tr  style={{borderBottom: "1px solid black"}}><td>Current</td><td>Ramp</td><td>Final</td><td>Output</td></tr>
+                            <tr>
+                                <td><span style={{fontFamily: 'Digi', fontSize: '3em', color:"red"}}>{this.state.currentTemperature}</span></td>
+                                <td>
+                                    <span style={{fontFamily: 'Digi', fontSize: '3em', color:"orange"}}>
+                                        {(this.state.mode!='off' && this.state.mode!='manual') ? this.state.currentTarget : 'NA'}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span style={{fontFamily: 'Digi', fontSize: '3em', color:"green"}}>
+                                        {(this.state.mode!='off' && this.state.mode!='manual') ? (this.state.ramping ? this.state.rampTarget : this.state.currentTarget) : 'NA'}
+                                    </span>
+                                </td>
+                                <td><span style={{fontFamily: 'Digi', fontSize: '2em'}}>{(this.state.currentOutput || 0).toFixed(2)}</span></td>
+                            </tr>
+                        </table>);
+                        contents.push(<div style={{fontSize: '0.8rem', textAlign: 'center'}}>(pp: {this.state.pp}, pi: {this.state.pi}, pd {this.state.pd})</div>);
+                        contents.push(<table style={{ marginTop:'0.5em', width: '100%'}}>
+                            <tr style={{borderBottom: "1px solid black"}}>
+                                <td>Mode</td>
+                                <td>Profile</td>
+                                <td>Step</td>
+                                <td>Ramp End At</td>
+                            </tr>
+                            <tr>
+                                <td>{this.state.mode}</td>
+                                <td>{this.state.mode=='profile' ? this.state.profileName : ''}</td>
+                                <td>{this.state.mode=='profile' ? this.state.profileStep : ''}</td>
+                                <td>{this.state.ramping ? this.state.rampTime : ''}</td>
+                            </tr>
+                        </table>);
                     } 
                     
                     if (!this.state.online || this.state.updateError) {
@@ -198,44 +218,46 @@
                     }
 
                     //Mode---
+                    let wrapper=[]                    
                     let modes = ['off','manual','setpoint','profile'];
                     let tmp = modes.map((x) => { return x})
                     tmp = modes.map((x) => {
                         return <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="radio" name={"mode"+this.props.hostname} value={x} checked={this.state.proposedMode === x} onChange={this.handleModeChange} />
+                            <input class="form-check-input" type="radio" name="mode" value={x} checked={this.state.proposedMode === x} onChange={this.handleModeChange} />
                             <label class="form-check-label" for={x}>{x}</label>
                         </div>
                     });
-                    contents.push(<div className="form-row">{ tmp }</div>);
+                    wrapper.push(<div style={{marginTop: '1em', borderBottom : '1px solid black'}}><label for="mode">Update Mode:</label></div>);
+                    wrapper.push(<div className="form-group">{ tmp }</div>);
 
                     //Mode Values--
                     if (this.state.proposedMode=='off') {
                         //Do nothing
                     }
                     else if (this.state.proposedMode=='manual') {                        
-                        contents.push(<div class="form-group row">
-                            <label for="manualOutput" class="col col-form-label">Output</label>
-                            <div class="col">
+                        wrapper.push(<div class="form-group">
+                            <label for="proposedOutput">Output:</label>
+                            <div>
                                 <input class="form-control" name="proposedOutput" placeholder="Output Level 0 to 1" value={this.state.proposedOutput} onChange={this.handleInputChange}/>
                             </div>
                         </div>)
                     }
                     else if (this.state.proposedMode=='setpoint') {
-                        contents.push(<div class="form-group row">
-                            <label for="setpoint" class="col-sm-4 col-form-label">Set Point</label>
-                            <div class="col-sm-8">
+                        wrapper.push(<div class="form-group">
+                            <label for="setpoint">Set Point:</label>
+                            <div>
                                 <input class="form-control" name="proposedSetpoint" placeholder="Target Temperature" value={this.state.proposedSetpoint} onChange={this.handleInputChange} />
                             </div>
                         </div>)                        
                     }
                     else if (this.state.proposedMode=='profile') {
-                        let names = Object.keys(this.state.profiles);
+                        let names = Object.keys(this.state.cfgProfiles);
                         tmp = names.map((x) => {
                             return <option value={x}>{x}</option>
                         })
-                        contents.push(<div class="form-group row">
-                            <label for="profile" class="col-sm-4 col-form-label">Profile</label>
-                            <div class="col-sm-8">
+                        wrapper.push(<div class="form-group">
+                            <label for="proposedProfile">Profile</label>
+                            <div>
                                 <select value={this.state.proposedProfile} name="proposedProfile" class="form-control" onChange={this.handleInputChange}>
                                     <option value="">Select...</option>
                                     {tmp}
@@ -245,18 +267,20 @@
                     }
 
                     //Submit proposed changes
+                    //console.log(this.state);
                     let changed=this.state.proposedMode != this.state.mode ||
-                        (this.state.mode=='manual' && this.state.proposedOutput != this.state.output) ||
-                        (this.state.mode=='setpoint' && this.state.proposedSetpoint != this.state.currentTarget) ||
-                        (this.state.mode=='profile' && this.state.proposedProfileName != this.state.profileName);
+                        (this.state.mode=='manual' && this.state.proposedOutput != this.state.cfgManualOutput) ||
+                        (this.state.mode=='setpoint' && this.state.proposedSetpoint != this.state.cfgSetpoint) ||
+                        (this.state.mode=='profile' && this.state.proposedProfile != this.state.profileName);
                     if (changed) {
-                        contents.push(<div class="form-group row">
-                            <div class="col">
-                                <input type="button" value="Update Settings" onClick={this.updateModeSettings} />
-                                <input type="button" value="Cancel" onClick={this.cancelUpdate} />
+                        wrapper.push(<div class="form-group row">
+                            <div class="col" style={{textAlign:'center'}}>
+                                <input type="button" className="btn btn-primary" value="Update Settings" onClick={this.updateModeSettings} />&nbsp;
+                                <input type="button" className="btn btn-secondary" value="Cancel" onClick={this.cancelUpdate} />
                             </div>
                         </div>)
                     }
+                    contents = contents.concat(wrapper);
 
                     return (<div className="col-md-4">{contents}</div>)
                     return (
@@ -275,14 +299,33 @@
             class Application extends React.Component {
                 constructor(props) {
                     super(props);
+                    this.state = {
+                        servers: []
+                    }
+                }
+
+                componentDidMount() {
+                    return fetch('/servers').then((res) => {
+                        res.json().then((data) => {
+                            this.setState ({ 
+                                servers : data
+                            });
+                        });					
+                    });
+                    //Kick off getting the server state
+                    this.getServerState(true);
+                }
+
+                componentWillUnmount() {
+                    if (this.queryTimer) clearTimeout(this.queryTimer);
                 }
 
                 render() {
                     return (
                         <div className="row">
-                            <Readout hostname="furnace" />
-                            <Readout hostname="annealer" />
-                            <Readout hostname="warmer" />
+                            {this.state.servers.map((s) => {
+                                return (<Readout hostname={s} />);
+                            })}
                         </div>
                     );
                 }                

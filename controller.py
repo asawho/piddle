@@ -189,12 +189,17 @@ class PidController(threading.Thread):
         data["currentTemperature"] = short["curr"] = round(self.tc.temperature)
         data["currentColdTemperature"] = short["cold"] = round(self.tc.coldJunction)
         data["currentTarget"] = short["ctgt"] = round(self.pid.setpoint)
+        data["currentOutput"] = short["out"] = round(self.dutyCycle, 2)
         data["ramping"] = short["ramping"] = self.ramping
+        data["rampTarget"] = short["rmptgt"] = round(self.ramp.finalTarget()) if self.ramping else 0
+        data["rampTime"]= short["rmptime"] = datetime.datetime.fromtimestamp(self.ramp.finalTime()).strftime("%H:%M:%S") if self.ramping else 0
+        data["profileStep"] = short["profile"] = self.modeProfile_Step if self.mode==ControllerMode.PROFILE else ''
         data["profileName"] = short["profile"] = self.modeProfile_Name if self.mode==ControllerMode.PROFILE else ''
-        data["profiles"] = short["profiles"] = config.profiles
-        data["rmpftgt"] = short["rmpftgt"] = round(self.ramp.finalTarget()) if self.ramping else 0
-        data["rmpftime"]= short["rmpftime"] = datetime.datetime.fromtimestamp(self.ramp.finalTime()).strftime("%H:%M:%S") if self.ramping else 0
-        data["output"] = short["out"] = round(self.dutyCycle, 2)
+
+        data["cfgManualOutput"] = short["cfgout"] = self.operationConfig.data["manualOutput"] if self.operationConfig.data is not None else 0        
+        data["cfgSetpoint"] = short["cfgsetpt"] = self.operationConfig.data["setpointTarget"] if self.operationConfig.data is not None else 0        
+        data["cfgProfiles"] = short["cfgprofiles"] = config.profiles
+
         data["pp"], data["pi"], data["pd"] = round(self.pid.components[0],3), round(self.pid.components[1],3), round(self.pid.components[2],3)
         short["pp"], short["pi"], short["pd"] = round(self.pid.components[0],3), round(self.pid.components[1],3), round(self.pid.components[2],3)        
         return(short if shortNames else data)
