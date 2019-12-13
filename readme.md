@@ -7,9 +7,13 @@ TODO - do the watchdog
 ### Wiring and Hardware
 TODO 
 
-### Installing 
+### Installing (this is after setting up Python as detailed at the bottom of the doc)
 ```
 git clone https://github.com/asawho/piddle
+cd piddle
+virtualenv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 ### Configuration
 All configuration is done in config.py.  The comments for settings are in the file.  Temperature is assumed to be in farenheit.  

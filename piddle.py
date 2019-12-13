@@ -66,7 +66,7 @@ validateProfiles(config.profiles, errors)
 validateAlerts(config.alerts, errors)
 if len(errors):
     for err in errors: 
-        self.log.error(err)
+        log.error(err)
     raise Exception(errors)
 
 #Initialize the controller---------------------------------------

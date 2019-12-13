@@ -127,7 +127,7 @@ if hostname=="annealer":
     rampRatePerHour = 1000
     alerts= [
         { "target": 1100, "latching": True, "activeLogicLevel": 0, "alertOutput": 1 }
-    ],
+    ]
     profiles.update({ 
         "anneal" : [
             #Needed to avoid a 1 hour ramp to 1000 if we are not exactly 1000
