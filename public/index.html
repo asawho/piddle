@@ -172,6 +172,11 @@
                     }	
                 };
 
+                shutdown = shutdownEvent => {
+                    //No worries about then or anything else, it is going down
+                    return (fetch(this.baseURL + '/shutdown'));
+                }
+
                 render() {
                     let inputNames="";
 
@@ -280,19 +285,16 @@
                             </div>
                         </div>)
                     }
-                    contents.push(<form>{wrapper}</form>);
-
+                    else {
+                        wrapper.push(<div style={{textAlign:'center'}}>
+                            <input type="button" className="btn btn-danger" value="Shutdown" onClick={this.shutdown} />
+                        </div>);
+                    }
+                    contents.push(<form>
+                        {wrapper}
+                    </form>);
                     return (<div className="col-md-4">{contents}</div>)
-                    return (
-                        <div className="form-row">
-                            <div className="col">
-                                <input type="text" className="form-control" placeholder="First name" />
-                            </div>
-                            <div class="col">
-                                <input type="text" className="form-control" placeholder="Last name" />
-                            </div>
-                        </div>
-                    )
+
                 }
             }
 

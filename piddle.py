@@ -37,15 +37,23 @@ def validateProfiles(profiles, errors):
         for index, value in enumerate(profile):
             if "type" not in value:
                 errors.append("Step {} of profile {} has no ramp type set.".format(index,key))
+                continue
             else:
                 if value["type"] not in ("rate", "time", "mode"):
                     errors.append("Step {} of profile {} has no unknown ramp type {} set.".format(index,key,value["type"]))
-
-            if value["type"]!='off' and "target" not in value:
-                errors.append("Step {} of profile {} has no target set.".format(index,key))
+                    continue
 
             if "value" not in value:
                 errors.append("Step {} of profile {} has no value set.".format(index,key))
+                continue
+
+            if value["value"]!='off' and "target" not in value:
+                errors.append("Step {} of profile {} has no target set.".format(index,key))
+                continue
+
+            # if value["type"]=='time' and value["value"]==0:
+            #     errors.append("Step {} of profile {} has zero for time.".format(index,key))
+
 
 def validateAlerts(alerts, errors):
     #Validate the profiles
@@ -137,6 +145,10 @@ def webState():
 @app.route('/servers')
 def webServers():
     return json.dumps(config.serverlist)
+
+@app.route('/shutdown')
+def webServers():
+    os.system("sudo shutdown -h now")  
 
 #Start it in daemon mode so that the web app dies when the pid loop does
 threading.Thread(target=app.run, kwargs=dict(host=config.listening_ip, port=config.listening_port, quiet=True), daemon=True).start()

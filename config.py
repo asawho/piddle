@@ -88,9 +88,16 @@ alerts= [
 # Another example, the following will transition to off
 #  { "type": 'mode', "value": 'off' }
 profiles= { 
-    #"default" : [
-    #    { "target": 0, "type": "rate", "value": 0 }
-    #]
+    "test" : [
+        #Ramp to 50
+        { "target": 50, "type": "rate", "value": 1000 },
+        #Hold for one minute
+        { "target": 50, "type": "time", "value": 1/60 },
+        #Ramp to 75
+        { "target": 75, "type": "rate", "value": 1000 },
+        #Back to room
+        { "target": 50, "type": "time", "value": 0 }
+    ],
     "castable-dryout" : [
         #Ramp to 200
         { "target": 200, "type": "rate", "value": 50 },

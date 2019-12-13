@@ -50,7 +50,11 @@ class RampStep:
         return self.rampEndTime
 
     def currentTarget(self):
-        val = self.rampStartPoint + self.rampPointDelta * ((time.time()-self.rampStartTime)/self.rampDuration)
+        if self.rampDuration==0:
+            val = self.rampEndPoint
+        else:
+            val = self.rampStartPoint + self.rampPointDelta * ((time.time()-self.rampStartTime)/self.rampDuration)
+            
         if self.rampEndPoint > self.rampStartPoint:
             val = min(val,self.rampEndPoint)
         if self.rampEndPoint < self.rampStartPoint:
@@ -304,11 +308,11 @@ class PidController(threading.Thread):
                 if self.modeProfile_Profile[self.modeProfile_Step]["type"]=="mode":
                     md = self.modeProfile_Profile[self.modeProfile_Step]["value"]
                     if md=="off":
-                        self.operationConfig.setModeOff(updateOperationFile=True)
+                        self.setModeOff(updateOperationFile=True)
                     elif md == "manual":
-                        self.operationConfig.setModeManual(self.modeProfile_Profile[self.modeProfile_Step]["target"], updateOperationFile=True)
+                        self.setModeManual(self.modeProfile_Profile[self.modeProfile_Step]["target"], updateOperationFile=True)
                     elif md == "setpoint":
-                        self.operationConfig.setModeSetPoint(self.modeProfile_Profile[self.modeProfile_Step]["target"], updateOperationFile=True)
+                        self.setModeSetPoint(self.modeProfile_Profile[self.modeProfile_Step]["target"], updateOperationFile=True)
                     elif md=="profile":
                         profname = self.modeProfile_Profile[self.modeProfile_Step]["target"]
                         if not self.setModeProfile(profname):
