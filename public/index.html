@@ -72,7 +72,10 @@
 
                                     cfgProfiles : data.cfgProfiles,
                                     cfgManualOutput : data.cfgManualOutput,
-                                    cfgSetpoint : data.cfgSetpoint
+                                    cfgSetpoint : data.cfgSetpoint,
+
+                                    updateMessage : '',
+                                    shutdownMsg : ''
                                 });
                                 if (firstCall) {
                                     let mode = (data.mode || '').toLowerCase();
@@ -113,7 +116,10 @@
                 }
 
                 updateModeSettings = updateModeSettingsBound => {
-                    this.setState({ updateError: '' });
+                    this.setState({ 
+                        updateError: '',
+                        updateMessage:''
+                    });
                     let url = this.baseURL;
                     if (this.state.proposedMode=='off') {
                         url = url + '/mode/off';
@@ -131,13 +137,20 @@
                         }
                         url = url + '/mode/profile/start/' + this.state.proposedProfile;
                     }
+                    this.setState({ updateMessage: 'Mode Change Requested, Please Wait...'})
                     return (fetch(url).then((res) => {
                         if (res.status!=200) {
                             res.json().then((data) => {
-                                this.setState({ updateError: data.msg });
-                                })
+                                this.setState({ 
+                                    updateError: data.msg,
+                                    updateMessage: ''
+                                });
+                            })
                         }}, (err) => {
-                            this.setState({ updateError: err });
+                            this.setState({ 
+                                updateError: err,
+                                updateMessage: ''
+                            });
                         }));
                 };
 
@@ -147,7 +160,8 @@
                         proposedProfile : this.state.profileName,
                         proposedOutput : this.state.cfgManualOutput,
                         proposedSetpoint : this.state.cfgSetpoint,
-                        updateError: ''                                        
+                        updateError: '',
+                        updateMessage:''                                       
                     }); 
                 };
 
@@ -174,6 +188,7 @@
 
                 shutdown = shutdownEvent => {
                     //No worries about then or anything else, it is going down
+                    this.setState({ shutdownMsg: 'Shutting down please wait...'})                    
                     return (fetch(this.baseURL + '/shutdown'));
                 }
 
@@ -216,85 +231,94 @@
                                 <td>{this.state.ramping ? this.state.rampTime : ''}</td>
                             </tr>
                         </table>);
-                    } 
-                    
-                    if (!this.state.online || this.state.updateError) {
-                        contents.push(<div className="alert alert-danger" role="alert">{this.state.error || this.state.updateError}</div>);
-                    }
 
-                    //Mode---
-                    let wrapper=[]                    
-                    let modes = ['off','manual','setpoint','profile'];
-                    let tmp = modes.map((x) => { return x})
-                    tmp = modes.map((x) => {
-                        return <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="radio" name="mode" value={x} checked={this.state.proposedMode === x} onChange={this.handleModeChange} />
-                            <label class="form-check-label" for={x}>{x}</label>
-                        </div>
-                    });
-                    wrapper.push(<div style={{marginTop: '1em', borderBottom : '1px solid black'}}><label for="mode">Update Mode:</label></div>);
-                    wrapper.push(<div className="form-group">{ tmp }</div>);
+                        //Mode---
+                        let wrapper=[]                    
+                        let modes = ['off','manual','setpoint','profile'];
+                        let tmp = modes.map((x) => { return x})
+                        tmp = modes.map((x) => {
+                            return <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="mode" value={x} checked={this.state.proposedMode === x} onChange={this.handleModeChange} />
+                                <label class="form-check-label" for={x}>{x}</label>
+                            </div>
+                        });
+                        wrapper.push(<div style={{marginTop: '1em', borderBottom : '1px solid black'}}><label for="mode">Update Mode:</label></div>);
+                        wrapper.push(<div className="form-group">{ tmp }</div>);
 
-                    //Mode Values--
-                    if (this.state.proposedMode=='off') {
-                        //Do nothing
-                    }
-                    else if (this.state.proposedMode=='manual') {                        
-                        wrapper.push(<div class="form-group">
-                            <label for="proposedOutput">Output:</label>
-                            <div>
-                                <input class="form-control" name="proposedOutput" placeholder="Output Level 0 to 1" value={this.state.proposedOutput} onChange={this.handleInputChange}/>
-                            </div>
-                        </div>)
-                    }
-                    else if (this.state.proposedMode=='setpoint') {
-                        wrapper.push(<div class="form-group">
-                            <label for="setpoint">Set Point:</label>
-                            <div>
-                                <input class="form-control" name="proposedSetpoint" placeholder="Target Temperature" value={this.state.proposedSetpoint} onChange={this.handleInputChange} />
-                            </div>
-                        </div>)                        
-                    }
-                    else if (this.state.proposedMode=='profile') {
-                        let names = Object.keys(this.state.cfgProfiles);
-                        tmp = names.map((x) => {
-                            return <option value={x}>{x}</option>
-                        })
-                        wrapper.push(<div class="form-group">
-                            <label for="proposedProfile">Profile</label>
-                            <div>
-                                <select value={this.state.proposedProfile} name="proposedProfile" class="form-control" onChange={this.handleInputChange}>
-                                    <option value="">Select...</option>
-                                    {tmp}
-                                </select>                            
-                            </div>
-                        </div>)                          
-                    }
+                        //Mode Values--
+                        if (this.state.proposedMode=='off') {
+                            //Do nothing
+                        }
+                        else if (this.state.proposedMode=='manual') {                        
+                            wrapper.push(<div class="form-group">
+                                <label for="proposedOutput">Output:</label>
+                                <div>
+                                    <input class="form-control" name="proposedOutput" placeholder="Output Level 0 to 1" value={this.state.proposedOutput} onChange={this.handleInputChange}/>
+                                </div>
+                            </div>)
+                        }
+                        else if (this.state.proposedMode=='setpoint') {
+                            wrapper.push(<div class="form-group">
+                                <label for="setpoint">Set Point:</label>
+                                <div>
+                                    <input class="form-control" name="proposedSetpoint" placeholder="Target Temperature" value={this.state.proposedSetpoint} onChange={this.handleInputChange} />
+                                </div>
+                            </div>)                        
+                        }
+                        else if (this.state.proposedMode=='profile') {
+                            let names = Object.keys(this.state.cfgProfiles);
+                            tmp = names.map((x) => {
+                                return <option value={x}>{x}</option>
+                            })
+                            wrapper.push(<div class="form-group">
+                                <label for="proposedProfile">Profile</label>
+                                <div>
+                                    <select value={this.state.proposedProfile} name="proposedProfile" class="form-control" onChange={this.handleInputChange}>
+                                        <option value="">Select...</option>
+                                        {tmp}
+                                    </select>                            
+                                </div>
+                            </div>)                          
+                        }
 
-                    //Submit proposed changes
-                    //console.log(this.state);
-                    let changed=this.state.proposedMode != this.state.mode ||
-                        (this.state.mode=='manual' && this.state.proposedOutput != this.state.cfgManualOutput) ||
-                        (this.state.mode=='setpoint' && this.state.proposedSetpoint != this.state.cfgSetpoint) ||
-                        (this.state.mode=='profile' && this.state.proposedProfile != this.state.profileName);
-                    if (changed) {
-                        wrapper.push(<div class="form-group row">
-                            <div class="col" style={{textAlign:'center'}}>
-                                <input type="button" className="btn btn-primary" value="Update Settings" onClick={this.updateModeSettings} />&nbsp;
-                                <input type="button" className="btn btn-secondary" value="Cancel" onClick={this.cancelUpdate} />
-                            </div>
-                        </div>)
+                        if (this.state.updateError) {
+                            wrapper.push(<div className="alert alert-danger" role="alert">{this.state.updateError}</div>);
+                        }
+                        if (this.state.updateMessage) {
+                            wrapper.push(<div className="alert alert-info" role="alert">{this.state.updateMessage}</div>);
+                        }
+                        if (this.state.shutdownMsg) {
+                            wrapper.push(<div className="alert alert-info" role="alert">{this.state.shutdownMsg}</div>);
+                        }
+                            
+                        //Submit proposed changes
+                        //console.log(this.state);
+                        let changed=this.state.proposedMode != this.state.mode ||
+                            (this.state.mode=='manual' && this.state.proposedOutput != this.state.cfgManualOutput) ||
+                            (this.state.mode=='setpoint' && this.state.proposedSetpoint != this.state.cfgSetpoint) ||
+                            (this.state.mode=='profile' && this.state.proposedProfile != this.state.profileName);
+                        if (changed) {
+                            wrapper.push(<div class="form-group row">
+                                <div class="col" style={{textAlign:'center'}}>
+                                    <input type="button" className="btn btn-primary" value="Update Settings" onClick={this.updateModeSettings} />&nbsp;
+                                    <input type="button" className="btn btn-secondary" value="Cancel" onClick={this.cancelUpdate} />
+                                </div>
+                            </div>)
+                        }
+                        else {
+                            wrapper.push(<div style={{textAlign:'center', marginTop:'2em'}}>
+                                <input type="button" className="btn btn-danger" value="Shutdown Pi" onClick={this.shutdown} />
+                            </div>);
+                        }
+                        contents.push(<form>
+                            {wrapper}
+                        </form>);
                     }
                     else {
-                        wrapper.push(<div style={{textAlign:'center'}}>
-                            <input type="button" className="btn btn-danger" value="Shutdown" onClick={this.shutdown} />
-                        </div>);
+                        contents.push(<div className="alert alert-danger" role="alert">{this.state.error}</div>);
                     }
-                    contents.push(<form>
-                        {wrapper}
-                    </form>);
+                    
                     return (<div className="col-md-4">{contents}</div>)
-
                 }
             }
 
