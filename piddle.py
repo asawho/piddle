@@ -74,6 +74,10 @@ ctrl = controller.PidController()
 
 #Setup the web API------------------------------------------------
 app = bottle.Bottle()
+@app.hook('after_request')
+def enableCors():
+    bottle.response.headers['Access-Control-Allow-Origin'] = '*'
+
 @app.route('/')
 def indexHTML():
     return bottle.static_file('index.html', root='./public')
