@@ -30,7 +30,7 @@ sensor_time_wait = 1
 
 #   PID parameters
 pid_kp = 0.02          # Proportional
-pid_ki = 0.00015       # Integration
+pid_ki = 0.00025       # Integration
 pid_kd = 0.0           # Derivative
 
 ### Outputs BCM, Switches zero-cross solid-state-relay, this is either a single pin
@@ -149,6 +149,10 @@ if hostname=="annealer":
     })
 
 if hostname=="furnace":
+    pid_kp = 0.01          # Proportional
+    pid_ki = 0.00001       # Integration
+    pid_kd = 0.0           # Derivative
+
     gpio_heat = [23,24]
     thermocouple_type = 'S'
     mcp9600_filter_coefficient = 0b111
