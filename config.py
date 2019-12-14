@@ -29,8 +29,8 @@ listening_port = 8080
 sensor_time_wait = 1
 
 #   PID parameters
-pid_kp = 0.03          # Proportional
-pid_ki = 0.00025       # Integration
+pid_kp = 0.02          # Proportional
+pid_ki = 0.00015       # Integration
 pid_kd = 0.0           # Derivative
 
 ### Outputs BCM, Switches zero-cross solid-state-relay, this is either a single pin
@@ -90,13 +90,13 @@ alerts= [
 profiles= { 
     "test" : [
         #Ramp to 50
-        { "target": 50, "type": "rate", "value": 1000 },
+        { "target": 40, "type": "rate", "value": 2000 },
         #Hold for one minute
-        { "target": 50, "type": "time", "value": 1/60 },
+        { "target": 40, "type": "time", "value": 1/360 },
         #Ramp to 75
-        { "target": 75, "type": "rate", "value": 1000 },
+        { "target": 42, "type": "rate", "value": 2000 },
         #Back to room
-        { "target": 50, "type": "time", "value": 0 }
+        { "target": 40, "type": "time", "value": 0 }
     ],
     "castable-dryout" : [
         #Ramp to 200

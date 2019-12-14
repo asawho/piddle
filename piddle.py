@@ -148,6 +148,11 @@ def webServers():
 
 @app.route('/shutdown')
 def webServers():
+    #If you're shutting down, then you're manually dealing, so off it first
+    ctrl.setModeOff(updateOperationFile=True)
+    #Let it figure out it is off
+    time.sleep(2)
+    #Shut the pi down
     os.system("sudo shutdown -h now")  
 
 #Start it in daemon mode so that the web app dies when the pid loop does

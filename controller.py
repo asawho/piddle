@@ -129,6 +129,8 @@ class PidController(threading.Thread):
                 GPIO.setup(val, GPIO.OUT)
                 self.pinOff(val)
             self.mechanicalRelayOff()
+            #Reset my kp, ki, kd
+            self.pid.reset()
 
         return True
 
@@ -288,24 +290,31 @@ class PidController(threading.Thread):
                     self.dutyCycle = self.pid(self.tc.temperature)
 
                 if self.mode == ControllerMode.PROFILE:
+                    #If I am ramping, then I am engaged in whatever step I am in
                     if self.ramping:
                         self.pid.setpoint = self.ramp.currentTarget()
+                        #If I have finished ramping, then transition to the next step
                         if self.ramp.isComplete():
+                            self.ramping=False
+                            self.ramp=None
                             self.modeProfile_Step=self.modeProfile_Step+1
                             if self.modeProfile_Step < len(self.modeProfile_Profile):
+                                #If that step is not of type mode, then it is a ramp
                                 if self.modeProfile_Profile[self.modeProfile_Step]["type"]!="mode":
                                     #Set the start value to the prior ramp steps target value, this prevents a lagging oven from starting ramps from the wrong temperature
                                     self.ramp = RampStep (self.modeProfile_Profile[self.modeProfile_Step-1]["target"], self.modeProfile_Profile[self.modeProfile_Step]["target"], self.modeProfile_Profile[self.modeProfile_Step]["type"], self.modeProfile_Profile[self.modeProfile_Step]["value"])
+                                    self.ramping=True
                                     self.pid.setpoint = self.ramp.currentTarget()                                    
-                            else:
-                                self.modeProfile_Step=self.modeProfile_Step-1
-                                self.ramping=False
-                                self.ramp=None
                     self.dutyCycle = self.pid(self.tc.temperature)
 
-            #Outside of the lock, check for mode transitions, do these to the disk so they
+            #Outside of the lock, check for mode transitions and game over, do these to the disk so they
             if self.mode == ControllerMode.PROFILE:
-                if self.modeProfile_Profile[self.modeProfile_Step]["type"]=="mode":
+                #If I made it to the end, then there was no transition, so turn it off
+                if self.modeProfile_Step >= len(self.modeProfile_Profile):
+                    self.setModeOff(updateOperationFile=True)
+
+                #If I am not at the end and I am on a transition step, then transition
+                elif self.modeProfile_Profile[self.modeProfile_Step]["type"]=="mode":
                     md = self.modeProfile_Profile[self.modeProfile_Step]["value"]
                     if md=="off":
                         self.setModeOff(updateOperationFile=True)
@@ -319,7 +328,7 @@ class PidController(threading.Thread):
                             log.error("Attemp to transition to unknown profile {}".format(profname))
                             self.setModeOff()
                     else:
-                        log.error("Unknown profile type {}".format(md))
+                        log.error("Unknown profile mode transition type {}".format(md))
                         self.setModeOff()
 
             #Handle the hotpins, do this outside of the lock as this really is constant work,

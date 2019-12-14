@@ -1,0 +1,15 @@
+*turn it all off on shutdown
+*clear kp, ki, kd on off
+*default to off on all profile endings
+adjust kp, ki, kd for each
+
+
+setup hood temp
+do garage
+
+do runaway
+do network watchdog
+
+do ada fruit order
+do a reboot option
+
