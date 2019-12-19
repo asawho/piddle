@@ -8,9 +8,11 @@ import config
 import json
 import re
 
+log = logging.getLogger('file')
+smtpLog = logging.getLogger('smtp')
+
 class OperationConfig:
     def __init__(self, path='operation.json'):
-        self.log = logging.getLogger()
         self.configPath = path
         self.lastConfigUpdate = 0
         self.data = None
@@ -42,7 +44,7 @@ class OperationConfig:
 
         if len(errors):
             for err in errors: 
-                self.log.error(err)
+                log.error(err)
             raise Exception(errors)
 
     def reset(self):

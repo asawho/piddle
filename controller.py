@@ -1,6 +1,5 @@
 from enum import Enum
-import os
-import sys
+import os, signal, sys
 import threading
 import time
 import datetime
@@ -17,7 +16,8 @@ import RPi.GPIO as GPIO
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 
-log = logging.getLogger()
+log = logging.getLogger('file')
+smtpLog = logging.getLogger('smtp')
 
 class RampStep:
     def __init__(self, startValue, targetValue, rampType, typeValue):
@@ -73,6 +73,8 @@ class PidController(threading.Thread):
         self.daemon = True
         self.lock = threading.Lock()
 
+        self.terminateSignalReceived = False
+
         self.time_step = config.sensor_time_wait
         self.tc = sensors.TempSensor()
 
@@ -101,10 +103,17 @@ class PidController(threading.Thread):
         self.ramping = False
         self.ramp = None
 
+        self.openLoopStarted = False
+        self.openLoopStartTemperature = None
+        self.openLoopStartTime = None
+
+        self.alertNoted=[False]*len(config.alerts)
+
     def resetToConfig(self):
         self.operationConfig.reset()
 
     def enableAlerts(self):
+        self.alertNoted=[False]*len(config.alerts)
         for x in range(1,5):
             self.tc.clearAlert(x)
         for a in config.alerts:
@@ -168,7 +177,6 @@ class PidController(threading.Thread):
     def setModeProfile(self, profilename):
         #print(profilename, config.profiles)
         if profilename not in config.profiles:
-            log.error('Could not start profile {} it is not defined'.format(profilename))
             return False
         profile = config.profiles[profilename]
 
@@ -260,14 +268,32 @@ class PidController(threading.Thread):
         if data["mode"]=="SETPOINT":
             self.setModeSetPoint(data["setpointTarget"], config.rampRatePerHour)
 
-    def run_forever(self):
+    def _sigDown(self, signum, frame):
+        log.info('Signal Terminated')
+        self.terminateSignalReceived=True
+
+    def robust_run_forever(self):
+        # So it turns out that when you don't handle SIGTERM, you just get shutdown, no finally
+        # For the Daemon operation, it is absolutely critical we handle SIGTERM and shutdown
+        # all outputs.
+        signal.signal(signal.SIGINT, self._sigDown)
+        signal.signal(signal.SIGTERM, self._sigDown)
+        try:
+            self._run_forever()
+        except Exception as e:
+            log.error("Shutting Down -> Unhandled Exception: " + str(e))
+            smtpLog.error("Shutting Down -> Unhandled Exception: " + str(e))
+        finally:
+            self.setModeOff()
+
+    def _run_forever(self):
         #Start the synchro timer, try and make it an even second to start
         syncStartTime = int(time.time()) + self.time_step
         carryOverTime = 0
         time.sleep(syncStartTime-time.time())
         lastLogTime=0
 
-        while True:
+        while not self.terminateSignalReceived:
             #Read my new thermocouple value, IMPORTANT ,this should take less than 1/60 of a second
             #if we are going for bursting hotpins.  MCP9600 takes ~4ms
             self.tc.update()
@@ -275,8 +301,8 @@ class PidController(threading.Thread):
             #Read any new configuration settings
             self.checkConfig()
 
-            #Don't let anyone update my internals while I am handling my tick, once I am done
-            #and sleeping, change my state all you want
+            # Don't let anyone update my internals while I am handling my tick, once I am done,
+            # change my state all you want
             with self.lock:
                 #MANUAL and OFF don't do anything here
                 if self.mode == ControllerMode.SETPOINT:
@@ -325,11 +351,69 @@ class PidController(threading.Thread):
                     elif md=="profile":
                         profname = self.modeProfile_Profile[self.modeProfile_Step]["target"]
                         if not self.setModeProfile(profname):
-                            log.error("Attemp to transition to unknown profile {}".format(profname))
-                            self.setModeOff()
+                            msg = "Attempt to transition to unknown profile {}. Shutting down.".format(profname)
+                            log.error(msg)
+                            smtpLog.error(msg)
+                            self.setModeOff(updateOperationFile=True)
                     else:
-                        log.error("Unknown profile mode transition type {}".format(md))
-                        self.setModeOff()
+                        msg = "Unknown profile mode transition type {}".format(md)
+                        log.error(msg)
+                        smtpLog.error(msg)
+                        self.setModeOff(updateOperationFile=True)
+
+            #Check for openLoop conditions
+            if config.openLoop_monitor_enabled:
+                if self.mode != ControllerMode.OFF and self.mode != ControllerMode.MANUAL:
+                    #If we are not at 100% power, then we are not running away
+                    if self.dutyCycle >= 1.0:
+                        #Start monitoring
+                        if not self.openLoopStarted:
+                            self.openLoopStarted = True
+                            self.openLoopStartTemperature = self.tc.temperature
+                            self.openLoopStartTime = time.time() 
+                        #Continue monitoring
+                        else:
+                            #If we are past our monitor window, verify we are not lagging
+                            if time.time() > self.openLoopStartTime + config.openLoop_time_window:
+                                #We must have an open loop
+                                if (self.tc.temperature - self.openLoopStartTemperature) < config.openLoop_minimum_temperature_change:
+                                    msg = 'Open Loop condition met, start: {}F end: {}F over: {}seconds at 100% power. Shutting down.'.format(self.openLoopStartTemperature, self.tc.temperature, config.openLoop_time_window)
+                                    log.error(msg)
+                                    smtpLog.error(msg)
+                                    self.setModeOff(updateOperationFile=True)
+                                #Well we made it past based on the temperature delta, but keep sliding that window going
+                                else:
+                                    self.openLoopStartTemperature = self.tc.temperature
+                                    self.openLoopStartTime = time.time() 
+
+                    #Flip back to no open loop needed for now
+                    else:                        
+                        self.openLoopStarted = False
+
+            # Check for temperature exceeded, so run through all of the alerts.  NOTE the MCP9600 has hardware
+            # pins that also do this alert.  Those hardware pins control the relay.  I mean really if you're over
+            # temperature, the duty cycle should already be zero.  So, meh how valuable I don't know.  But...
+            # the email and log alerts are definitely valuable.  Have to know it is tripped.
+            for x in range(len(config.alerts)):
+                #If we are over, then we have a problem and set the dutyCyle to zero
+                if self.tc.temperature > config.alerts[x]["target"]:
+                    self.dutyCycle = 0
+                    #Send out the email
+                    if not self.alertNoted[x]:
+                        msg = "Temperature Limit Exceeded -> Limit {} < Actual {}".format(config.alerts[x]["target"], self.tc.temperature)
+                        log.error(msg)
+                        smtpLog.error(msg)              
+                        self.alertNoted[x] = True                    
+                        #If it is a latching alert, then it requires manual intervention, so go to off
+                        if config.alerts[x]["latching"]:
+                            self.setModeOff(updateOperationFile=True)
+
+                #Else if there was a prior problem, continue at zero
+                elif self.alertNoted[x]:
+                    self.dutyCycle=0
+                    #If it is  not latching and we have come back under by 5, re-enable
+                    if not config.alerts[x]["latching"] and self.tc.temperature < config.alerts[x]["target"] - 5:                        
+                        self.alertNoted[x]=False
 
             #Handle the hotpins, do this outside of the lock as this really is constant work,
             carryOverTime = self.applyOutput(syncStartTime, carryOverTime, self.dutyCycle)

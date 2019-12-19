@@ -55,6 +55,16 @@ mcp9600_filter_coefficient = 0b001
 #How many seconds of failed thermocouple reads before raising an exception
 bad_thermocouple_read_timeout = 60
 
+### Monitor for openLoop conditions
+# The controller can monitor for openLoop conditions where full power is applied and yet the 
+# temperature is not changing by some rate.  You can define whether this is enabled or not
+# and what the minimum temperature increase is over a certain time (in seconds) when power
+# is at 100%.  NOTE: This is monitor can only be tripped if both are true, power output = 100%
+# for the openLoop_time_window and the temperature changes by less than openLoop_minimum_temperature_change
+openLoop_monitor_enabled = True
+openLoop_time_window = 60
+openLoop_minimum_temperature_change = 10
+
 #SETPOINT AND PROFILE: When ramping to a setpoint or to resume a profile after a 
 #power cycle, what is the rate to ramp at.  If ==0, then as fast as possible
 rampRatePerHour : 0

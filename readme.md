@@ -67,6 +67,14 @@ This requires that the application is located in /home/pi/piddle.  If it is not,
 ### Setting up Multiple Controllers
 The application is designed to support multiple temperature controllers using the same code base.  This allows you to have any number of these running, but be able to keep the configuration in one github repo or file share.  This way you do not have to keep track of several different configurations all living on different machines. Nor do you have to go to several different places to view the status over the web as the web interface grabs the list of servers from the configuration.  To this end, the config.py supports configuration by server name.  So you set the Pi host name (see below) and then add your settings to one copy of config.py.  This can then be shared between machines either manually or by forking this repo and cloning to each Pi once it is configured.
 
+### Setting up Email Alert Notifications
+Copy the example smtpLogConfig_example.py to smtpLogConfig.py and configure your smtp settings.  If the file smtpLogConfig.py does not exist, then no email alerts will be sent.
+```
+cp smtpLogConfig_example.py smtpLogConfig.py
+nano smtpLogConfigy.py
+```
+You can also send texts this way.  Varies by carrier but for verizon, the email address is [your phone number]@vtext.com.  So, you could send an email and a text on an alert with this.
+
 ## Pi Setup Directions
 
 How many times do we have to do this and how many times do we have to look it up.

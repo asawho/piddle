@@ -1,31 +1,46 @@
 import bottle
 import json
 import threading
-import time
-import datetime
-import os
-import sys
-import logging
+import time, datetime
+import os, sys, logging
 from logging.handlers import RotatingFileHandler
 from logging.handlers import TimedRotatingFileHandler
+from logging.handlers import SMTPHandler
 import controller
 import operationConfig
 import config
 
-#Setup the logger-------------------------------------------------
+#Setup the loggers-------------------------------------------------
 if not os.path.exists('data'):
     os.mkdir('data')
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(message)s",
-    handlers=[
-        #RotatingFileHandler (config.log_path, maxBytes=1024*1024, backupCount=1),
-        #TimedRotatingFileHandler("data/piddle.log", when="m", interval=1, backupCount=5)
-        TimedRotatingFileHandler("./data/piddle.log", when="midnight", interval=1, backupCount=2),
-        logging.StreamHandler(sys.stdout)
-    ])
-log = logging.getLogger()
+fileLogger = logging.getLogger('file')
+fileLogger.setLevel(logging.INFO)
+fmt = logging.Formatter("%(asctime)s  %(message)s")
+fh = TimedRotatingFileHandler("./data/piddle.log", when="midnight", interval=1, backupCount=2)
+sh = logging.StreamHandler(sys.stdout)
+fh.setFormatter(fmt)
+sh.setFormatter(fmt)
+fileLogger.addHandler(fh)
+fileLogger.addHandler(sh)
+log = fileLogger
 log.info('Starting...')
+
+smtpLogger = logging.getLogger('smtp')
+try:
+    import smtpLogConfig
+    smtphost = os.uname()[1].lower()
+    smtpLogger.setLevel(logging.INFO)
+    smtpLogger.addHandler(SMTPHandler(smtpLogConfig.mailhost, smtpLogConfig.fromaddr, smtpLogConfig.toaddrs, smtphost + ' alert', smtpLogConfig.credentials, smtpLogConfig.secure))
+except ImportError:
+    #If it fails to load, then the logger just logs to the console
+    pass
+
+# If we don't start up as off, give everyone a heads up.  This way if it reboots because of a power loss or 
+# something you get alerted that it is coming back up hot.
+operationConfig = operationConfig.OperationConfig()
+operationConfig.checkForNewConfig()
+if operationConfig.data["mode"]!="OFF":
+    smtpLogger.info('Starting up in HOT in mode:{}, manualOutput:{}, setPointTarget:{}'.format(operationConfig.data["mode"],operationConfig.data["manualOutput"], operationConfig.data["setpointTarget"]))
 
 #Verify the configs----------------------------------------------
 errors=[]
@@ -159,10 +174,7 @@ def webServers():
 threading.Thread(target=app.run, kwargs=dict(host=config.listening_ip, port=config.listening_port, quiet=True), daemon=True).start()
 
 #Start the controller, make dang sure it is off at the end-------------------------------
-try:
-    ctrl.run_forever()
-finally:
-    ctrl.setModeOff()
+ctrl.robust_run_forever()
 
 
 
