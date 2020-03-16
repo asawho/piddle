@@ -123,7 +123,7 @@ profiles= {
 ### --------------------------------------------------------------------------------------------------------
 # List of servers on this network that will take part in watchdog and be displayed in the web interface
 # It is not necessary to have any servers in this list.
-serverlist=['furnace','annealer','warmer']
+serverlist=['furnace','annealer','warmer','canepull']
 if hostname not in serverlist:
     serverlist.append(hostname)
 
@@ -138,6 +138,23 @@ if hostname=="warmer":
         { "target": 1100, "latching": True, "activeLogicLevel": 0, "alertOutput": 1 }
     ]
 
+if hostname=="canepull":
+    #Ramp to operating in 1 hour
+    rampRatePerHour=1000
+    #Over 2000F and we are in trouble
+    alerts = [
+        { "target": 2000, "latching": True, "activeLogicLevel": 0, "alertOutput": 1 }
+    ]
+    profiles.update({ 
+        "cook" : [
+            #Needed to avoid a 1 hour ramp to 1000 if we are not exactly 1000
+            { "target": 1700, "type": "time", "value": 0 },
+            #Hold at 1000 for an hour
+            { "target": 1700, "type": "time", "value": 2 },
+            #Transition to 1700 and hold
+            { "target": 1700, "type": 'mode', "value": 'setpoint' }
+        ]
+    })    
 
 if hostname=="annealer":
     #Ramp to operating in 1 hour

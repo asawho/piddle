@@ -5,7 +5,7 @@ import datetime
 import config
 import mcp9600
 
-log = logging.getLogger()
+log = logging.getLogger('file')
 
 #Threaded class for reading from the thermocouple    
 class TempSensor:
@@ -49,8 +49,8 @@ class TempSensor:
             self.failStart=None
         #After 60 fails, 
         except Exception:
-            if failStart:
-                if time.time > failStart+self.failTimeout:
+            if self.failStart:
+                if time.time > self.failStart+self.failTimeout:
                     raise      
             else:
-                failStart = time.time()  
+                self.failStart = time.time()  
