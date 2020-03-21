@@ -1,1 +1,1 @@
-{"mode": "OFF", "manualOutput": 0.0, "setpointTarget": 0.0}
+{"mode": "SETPOINT", "manualOutput": 0.05, "setpointTarget": 1400.0}

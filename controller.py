@@ -89,7 +89,7 @@ class PidController(threading.Thread):
 
         self.operationConfig = operationConfig.OperationConfig()
 
-        self.pid = PID (config.pid_kp, config.pid_ki, config.pid_kd, auto_mode=True, sample_time=None, output_limits=(0.0,1.0))
+        self.pid = PID (config.pid_kp, config.pid_ki, config.pid_kd, auto_mode=True, sample_time=None, output_limits=(0.0,config.pid_output_max))
         self.mode = ControllerMode.OFF
 
         self.modeManual_Output = 0
@@ -108,6 +108,16 @@ class PidController(threading.Thread):
         self.openLoopStartTime = None
 
         self.alertNoted=[False]*len(config.alerts)
+
+        #Warm up the thermocouple
+        self.tc.update()
+        log.info('Warming up the thermocouple for 30 seconds (initial temperature {})...'.format(self.tc.temperature))
+        cnt=0
+        while cnt < 30:
+            self.tc.update()
+            time.sleep(1)
+            cnt=cnt+1
+        log.info('Warmed up thermocouple temperature: {}'.format(self.tc.temperature))
 
     def resetToConfig(self):
         self.operationConfig.reset()
@@ -281,8 +291,10 @@ class PidController(threading.Thread):
         try:
             self._run_forever()
         except Exception as e:
-            log.error("Shutting Down -> Unhandled Exception: " + str(e))
-            smtpLog.error("Shutting Down -> Unhandled Exception: " + str(e))
+            log.error("Shutting Down -> Unhandled Exception")
+            smtpLog.error("Shutting Down -> Unhandled Exception")
+            log.error(e, exc_info=True)
+            smtpLog.error(e, exc_info=True)
         finally:
             self.setModeOff()
 

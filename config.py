@@ -33,6 +33,8 @@ pid_kp = 0.02          # Proportional
 pid_ki = 0.00025       # Integration
 pid_kd = 0.0           # Derivative
 
+pid_output_max = 1.0   # 0 to max for % output
+
 ### Outputs BCM, Switches zero-cross solid-state-relay, this is either a single pin
 # or an array of pins.  For n pins, the assumption is each pin controls 1/n percent
 # of the total power.  So for two pins, each pin would control 50% of the power.  
@@ -63,7 +65,7 @@ bad_thermocouple_read_timeout = 60
 # for the openLoop_time_window and the temperature changes by less than openLoop_minimum_temperature_change
 openLoop_monitor_enabled = True
 openLoop_time_window = 60
-openLoop_minimum_temperature_change = 10
+openLoop_minimum_temperature_change = 5
 
 #SETPOINT AND PROFILE: When ramping to a setpoint or to resume a profile after a 
 #power cycle, what is the rate to ramp at.  If ==0, then as fast as possible
@@ -139,6 +141,12 @@ if hostname=="warmer":
     ]
 
 if hostname=="canepull":
+    pid_kp = 0.005         # Proportional
+    pid_ki = 0.00001       # Integration
+    pid_kd = 0.0           # Derivative
+
+    pid_output_max = 0.4   # Max 
+
     #Ramp to operating in 1 hour
     rampRatePerHour=1000
     #Over 2000F and we are in trouble
@@ -146,6 +154,10 @@ if hostname=="canepull":
         { "target": 2000, "latching": True, "activeLogicLevel": 0, "alertOutput": 1 }
     ]
     profiles.update({ 
+        "warmy" : [
+            { "target": 400, "type": "time", "value": 5 },
+            { "target": 400, "type": "mode", "value": 'setpoint' }
+        ],
         "cook" : [
             #Needed to avoid a 1 hour ramp to 1000 if we are not exactly 1000
             { "target": 1700, "type": "time", "value": 0 },
